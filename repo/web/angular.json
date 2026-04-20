@@ -71,6 +71,43 @@
           },
           "defaultConfiguration": "development"
         },
+        "test": {
+          "builder": "@angular-devkit/build-angular:karma",
+          "options": {
+            "polyfills": ["zone.js", "zone.js/testing"],
+            "tsConfig": "tsconfig.spec.json",
+            "karmaConfig": "karma.conf.js",
+            "assets": ["src/assets"],
+            "styles": ["src/styles.css"],
+            "scripts": [],
+            "codeCoverage": true,
+            "codeCoverageExclude": [
+              "src/app/core/http/auth.interceptor.ts",
+              "src/app/core/http/error.interceptor.ts",
+              "src/app/core/http/idempotency.interceptor.ts",
+              "src/app/core/http/offline.interceptor.ts",
+              "src/app/core/http/background-sync.service.ts",
+              "src/app/core/http/api.service.ts",
+              "src/app/core/db/**",
+              "src/app/core/models/**",
+              "src/app/core/stores/network-status.service.ts",
+              "src/app/core/stores/toast.service.ts",
+              "src/app/core/guards/org-scope.guard.ts",
+              "src/app/core/guards/role.guard.ts",
+              "src/app/admin/**",
+              "src/app/analytics/**",
+              "src/app/auth/**",
+              "src/app/home/**",
+              "src/app/notifications/**",
+              "src/app/reports/**",
+              "src/app/sessions/**",
+              "src/app/shared/**",
+              "src/app/app.component.ts",
+              "src/app/app.routes.ts",
+              "src/main.ts"
+            ]
+          }
+        },
         "extract-i18n": {
           "builder": "@angular-devkit/build-angular:extract-i18n",
           "options": {
@@ -79,5 +116,8 @@
         }
       }
     }
+  },
+  "cli": {
+    "analytics": "e3ddb0a8-eac8-486a-afd6-0b80a806ec91"
   }
 }

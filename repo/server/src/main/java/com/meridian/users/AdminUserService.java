@@ -77,6 +77,21 @@ public class AdminUserService {
                 actorId, "UNLOCK", "USER", targetId.toString(), "{}"));
     }
 
+    public UserSummaryDto getById(UUID id) {
+        return toSummary(findActive(id));
+    }
+
+    @Transactional
+    public void updateStatus(UUID targetId, String status, UUID actorId) {
+        User user = findActive(targetId);
+        String old = user.getStatus();
+        user.setStatus(status);
+        userRepository.save(user);
+        auditEventRepository.save(AuditEvent.of(
+                actorId, "PERMISSION_CHANGE", "USER", targetId.toString(),
+                "{\"action\":\"STATUS_UPDATE\",\"from\":\"" + old + "\",\"to\":\"" + status + "\"}"));
+    }
+
     private User findActive(UUID id) {
         return userRepository.findById(id)
                 .filter(u -> u.getDeletedAt() == null)

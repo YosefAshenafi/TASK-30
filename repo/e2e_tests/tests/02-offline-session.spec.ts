@@ -1,4 +1,4 @@
-import { test, expect, BrowserContext } from '@playwright/test';
+import { test, expect, BrowserContext } from './coverage.fixture';
 import { API, apiLogin, loginViaUI } from './helpers';
 
 /**

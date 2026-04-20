@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -10,7 +10,7 @@ import { ButtonComponent } from '../../shared/ui/button.component';
 import { SelectComponent, SelectOption } from '../../shared/ui/select.component';
 import { BannerComponent } from '../../shared/ui/banner.component';
 import { SessionRecord } from '../../core/db/dexie';
-import { catchError, of } from 'rxjs';
+import { catchError, of, Subscription } from 'rxjs';
 
 function uuidv7(): string {
   const now = Date.now();
@@ -54,7 +54,7 @@ function uuidv7(): string {
 
         <app-select
           label="Cohort (optional)"
-          placeholder="No cohort"
+          [placeholder]="cohortPlaceholder"
           [options]="cohortOptions"
           formControlName="cohortId" />
 
@@ -75,12 +75,14 @@ function uuidv7(): string {
     </div>
   `,
 })
-export class SessionNewComponent implements OnInit {
+export class SessionNewComponent implements OnInit, OnDestroy {
   form: FormGroup;
   loading = false;
   errorMessage = '';
   courseOptions: SelectOption[] = [];
   cohortOptions: SelectOption[] = [];
+  cohortPlaceholder = 'Select a course first…';
+  private sub = new Subscription();
 
   constructor(
     private fb: FormBuilder,
@@ -104,11 +106,34 @@ export class SessionNewComponent implements OnInit {
       this.courseOptions = r.content.map(c => ({ value: c.id, label: c.title }));
     });
 
-    this.http.get<{ content: { id: string; name: string }[] }>('/api/v1/cohorts?size=100').pipe(
-      catchError(() => of({ content: [] }))
-    ).subscribe(r => {
-      this.cohortOptions = r.content.map(c => ({ value: c.id, label: c.name }));
-    });
+    const cohortCtrl = this.form.get('cohortId')!;
+    cohortCtrl.disable();
+
+    this.sub.add(
+      this.form.get('courseId')!.valueChanges.subscribe((courseId: string) => {
+        cohortCtrl.setValue('');
+        this.cohortOptions = [];
+
+        if (!courseId) {
+          cohortCtrl.disable();
+          this.cohortPlaceholder = 'Select a course first…';
+          return;
+        }
+
+        this.cohortPlaceholder = 'Loading…';
+        this.http.get<{ id: string; name: string }[]>(`/api/v1/courses/${courseId}/cohorts`).pipe(
+          catchError(() => of([]))
+        ).subscribe(cohorts => {
+          this.cohortOptions = cohorts.map(c => ({ value: c.id, label: c.name }));
+          this.cohortPlaceholder = cohorts.length ? 'No cohort' : 'No cohorts available';
+          cohortCtrl.enable();
+        });
+      })
+    );
+  }
+
+  ngOnDestroy(): void {
+    this.sub.unsubscribe();
   }
 
   submit(): void {

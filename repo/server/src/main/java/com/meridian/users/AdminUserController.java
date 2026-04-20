@@ -2,6 +2,7 @@ package com.meridian.users;
 
 import com.meridian.common.web.PageResponse;
 import com.meridian.users.dto.RejectRequest;
+import com.meridian.users.dto.StatusUpdateRequest;
 import com.meridian.users.dto.UserSummaryDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,19 @@ public class AdminUserController {
                                        @Valid @RequestBody RejectRequest req,
                                        Authentication auth) {
         adminUserService.reject(id, UUID.fromString(auth.getName()), req.reason());
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<UserSummaryDto> getById(@PathVariable UUID id) {
+        return ResponseEntity.ok(adminUserService.getById(id));
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<Void> updateStatus(@PathVariable UUID id,
+                                             @Valid @RequestBody StatusUpdateRequest req,
+                                             Authentication auth) {
+        adminUserService.updateStatus(id, req.status(), UUID.fromString(auth.getName()));
         return ResponseEntity.noContent().build();
     }
 

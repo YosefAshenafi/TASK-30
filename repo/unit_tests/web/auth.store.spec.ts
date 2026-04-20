@@ -82,4 +82,18 @@ describe('AuthStore', () => {
     expect(() => store.hydrateFromStorage()).not.toThrow();
     expect(store.isAuthenticated()).toBeFalse();
   });
+
+  it('should return userStatus when profile is set', () => {
+    expect(store.userStatus()).toBeNull();
+    store.setProfile(mockProfile);
+    expect(store.userStatus()).toBe('ACTIVE');
+  });
+
+  it('should store tokens and profile on login', () => {
+    store.login('access-token-123', 'refresh-token-456', mockProfile);
+    expect(store.isAuthenticated()).toBeTrue();
+    expect(store.userId()).toBe(mockProfile.id);
+    expect(localStorage.getItem('meridian_access_token')).toBe('access-token-123');
+    expect(localStorage.getItem('meridian_refresh_token')).toBe('refresh-token-456');
+  });
 });

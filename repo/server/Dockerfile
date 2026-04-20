@@ -4,7 +4,10 @@ WORKDIR /app
 COPY pom.xml .
 COPY mvnw .
 COPY .mvn .mvn
-RUN chmod +x mvnw && mvn dependency:go-offline -q
+RUN chmod +x mvnw \
+    && mvn dependency:go-offline -q \
+    && mvn dependency:resolve-plugins -q \
+    && mvn -q -DskipTests test-compile
 COPY src ./src
 EXPOSE 8080
 CMD ["./mvnw", "spring-boot:run"]

@@ -7,6 +7,7 @@ export default defineConfig({
   retries: process.env['CI'] ? 1 : 0,
   workers: 1,
   reporter: [['html', { open: 'never' }], ['list']],
+  globalTeardown: './setup/global-teardown.ts',
   use: {
     baseURL: process.env['BASE_URL'] ?? 'http://localhost:4200',
     trace: 'on-first-retry',

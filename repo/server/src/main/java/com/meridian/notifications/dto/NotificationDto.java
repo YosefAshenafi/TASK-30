@@ -7,6 +7,7 @@ public record NotificationDto(
         UUID id,
         UUID recipientId,
         String templateKey,
+        String payload,
         RenderedContent rendered,
         String severity,
         Instant readAt,

@@ -23,6 +23,8 @@
         <jjwt.version>0.12.6</jjwt.version>
         <bucket4j.version>8.10.1</bucket4j.version>
         <logstash-logback.version>7.4</logstash-logback.version>
+        <jacoco.destFile>${project.build.directory}/jacoco.exec</jacoco.destFile>
+        <jacoco.reportDir>${project.build.directory}/site/jacoco</jacoco.reportDir>
     </properties>
 
     <dependencies>
@@ -166,6 +168,29 @@
                         </exclude>
                     </excludes>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>jacoco-prepare</id>
+                        <goals><goal>prepare-agent</goal></goals>
+                        <configuration>
+                            <destFile>${jacoco.destFile}</destFile>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>test</phase>
+                        <goals><goal>report</goal></goals>
+                        <configuration>
+                            <dataFile>${jacoco.destFile}</dataFile>
+                            <outputDirectory>${jacoco.reportDir}</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

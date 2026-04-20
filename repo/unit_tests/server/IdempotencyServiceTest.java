@@ -45,7 +45,7 @@ class IdempotencyServiceTest {
     void checkReturnsCachedValueOnHit() throws Exception {
         String key = "idem-key-1";
         String hash = service.hashBody("{\"a\":1}");
-        IdempotencyKey cached = buildKey(key, hash, "{\"value\":42}");
+        IdempotencyKey cached = buildKey(key, hash, "42");
         when(repository.findById(key)).thenReturn(Optional.of(cached));
 
         Optional<Integer> result = service.check(key, hash, Integer.class);
@@ -82,6 +82,31 @@ class IdempotencyServiceTest {
         verifyNoInteractions(repository);
     }
 
+    @Test
+    void checkReturnsEmptyWhenDeserializationFails() {
+        String key = "idem-key-fail";
+        String hash = service.hashBody("{}");
+        IdempotencyKey cached = buildKey(key, hash, "not-valid-json-for-integer");
+        when(repository.findById(key)).thenReturn(Optional.of(cached));
+
+        Optional<Integer> result = service.check(key, hash, Integer.class);
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void storeWithNonNullKey() {
+        String key = "store-key-1";
+        UUID userId = UUID.randomUUID();
+        String hash = "h1";
+
+        service.store(key, userId, hash, 99);
+
+        verify(repository).save(argThat(ik ->
+            ik.getKey().equals(key) &&
+            ik.getUserId().equals(userId) &&
+            ik.getRequestHash().equals(hash)));
+    }
+
     private IdempotencyKey buildKey(String key, String hash, String json) {
         IdempotencyKey k = new IdempotencyKey();
         k.setKey(key);
@@ -89,7 +114,6 @@ class IdempotencyServiceTest {
         k.setRequestHash(hash);
         k.setResponseJson(json);
         k.setCreatedAt(Instant.now());
-        k.setExpiresAt(Instant.now().plusSeconds(3600));
         return k;
     }
 }

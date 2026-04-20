@@ -1,6 +1,8 @@
 package com.meridian.sessions.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -24,6 +26,7 @@ public class IdempotencyKey {
     @Column(name = "request_hash", nullable = false)
     private String requestHash;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "response_json", nullable = false, columnDefinition = "jsonb")
     private String responseJson;
 

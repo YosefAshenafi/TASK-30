@@ -83,6 +83,7 @@ public class NotificationController {
         String bodyHtml = tmpl != null ? renderer.renderToHtml(tmpl.getBodyTmpl(), Map.of()) : "";
         String severity = n.getSeverity() != null ? n.getSeverity() : "INFO";
         return new NotificationDto(n.getId(), n.getUserId(), n.getTemplateKey(),
+                n.getPayload(),
                 new NotificationDto.RenderedContent(subject, bodyHtml),
                 severity, n.getReadAt(), n.getCreatedAt());
     }

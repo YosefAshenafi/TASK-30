@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './coverage.fixture';
 
 /**
  * Reduced-motion and keyboard-only navigation on auth and session-run pages.

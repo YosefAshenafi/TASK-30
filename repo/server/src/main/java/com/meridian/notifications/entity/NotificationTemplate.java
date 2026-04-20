@@ -1,6 +1,8 @@
 package com.meridian.notifications.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -23,6 +25,7 @@ public class NotificationTemplate {
     @Column(name = "body_tmpl", nullable = false)
     private String bodyTmpl;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String variables = "[]";
 

@@ -27,13 +27,15 @@
     "dexie": "^3.2.4",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
-    "zone.js": "~0.14.3",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "zone.js": "~0.14.3"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "^17.3.0",
     "@angular/cli": "^17.3.0",
     "@angular/compiler-cli": "^17.3.0",
+    "@playwright/test": "^1.43.0",
+    "@types/jasmine": "^6.0.0",
     "@typescript-eslint/eslint-plugin": "^7.8.0",
     "@typescript-eslint/parser": "^7.8.0",
     "autoprefixer": "^10.4.17",
@@ -45,7 +47,6 @@
     "karma-coverage": "~2.2.0",
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "~2.1.0",
-    "@playwright/test": "^1.43.0",
     "postcss": "^8.4.33",
     "prettier": "^3.2.5",
     "tailwindcss": "^3.4.0",

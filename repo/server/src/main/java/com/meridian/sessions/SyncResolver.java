@@ -18,8 +18,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -35,6 +37,7 @@ public class SyncResolver {
     public SyncResult resolve(SyncRequest req, UUID userId) {
         List<SyncResult.AppliedItem> applied = new ArrayList<>();
         List<SyncResult.ConflictItem> conflicts = new ArrayList<>();
+        Set<UUID> verifiedSessionIds = new HashSet<>();
 
         for (SyncRequest.SessionSyncItem item : req.sessions()) {
             String hash = idempotencyService.hashBody(item.toString());
@@ -60,6 +63,10 @@ public class SyncResolver {
             Optional<TrainingSession> existingOpt = sessionRepo.findByIdAndDeletedAtIsNull(item.id());
             if (existingOpt.isPresent()) {
                 TrainingSession existing = existingOpt.get();
+                if (!existing.getStudentId().equals(userId)) {
+                    conflicts.add(new SyncResult.ConflictItem(item.id(), "ACCESS_DENIED", null));
+                    continue;
+                }
                 if (item.clientUpdatedAt().isBefore(existing.getClientUpdatedAt())) {
                     conflicts.add(new SyncResult.ConflictItem(item.id(), "OLDER_CLIENT_TIMESTAMP",
                             SessionMapper.toDto(existing)));
@@ -69,12 +76,14 @@ public class SyncResolver {
                 sessionRepo.save(existing);
                 TrainingSessionDto dto = SessionMapper.toDto(existing);
                 idempotencyService.store(item.idempotencyKey(), userId, hash, dto);
+                verifiedSessionIds.add(item.id());
                 applied.add(new SyncResult.AppliedItem(item.id(), "session", "UPDATED"));
             } else {
                 TrainingSession session = createSession(item, userId);
                 sessionRepo.save(session);
                 TrainingSessionDto dto = SessionMapper.toDto(session);
                 idempotencyService.store(item.idempotencyKey(), userId, hash, dto);
+                verifiedSessionIds.add(item.id());
                 applied.add(new SyncResult.AppliedItem(item.id(), "session", "CREATED"));
             }
         }
@@ -99,6 +108,15 @@ public class SyncResolver {
             if (cached.isPresent()) {
                 applied.add(new SyncResult.AppliedItem(item.sessionId(), "set", "NOOP"));
                 continue;
+            }
+
+            if (!verifiedSessionIds.contains(item.sessionId())) {
+                Optional<TrainingSession> sess = sessionRepo.findByIdAndDeletedAtIsNull(item.sessionId());
+                if (sess.isEmpty() || !sess.get().getStudentId().equals(userId)) {
+                    conflicts.add(new SyncResult.ConflictItem(item.sessionId(), "ACCESS_DENIED", null));
+                    continue;
+                }
+                verifiedSessionIds.add(item.sessionId());
             }
 
             Optional<SessionActivitySet> existingOpt = setRepo.findBySessionIdAndActivityIdAndSetIndex(
