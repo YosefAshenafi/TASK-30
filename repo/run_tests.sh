@@ -52,6 +52,23 @@ _jacoco_pct() {
   }' "$csv"
 }
 
+# Istanbul: worst dimension among statements / branches / functions / lines.
+_web_worst_pct() {
+  local cov_file="$1"
+  node -e "
+try {
+  var s = require('$cov_file');
+  var t = s.total;
+  if (!t || !t.statements || !t.statements.total) { console.log('N/A'); process.exit(0); }
+  var dims = ['statements','branches','functions','lines'].map(function (k) {
+    var x = t[k];
+    return (x && x.total > 0) ? x.pct : 100;
+  });
+  console.log(Math.floor(Math.min.apply(null, dims)));
+} catch (e) { console.log('N/A'); }
+" 2>/dev/null || echo "N/A"
+}
+
 # ── Tracking (bash 3.2-compatible: parallel indexed arrays) ───────────────────
 declare -a SUITE_ORDER=()
 declare -a SUITE_STATUS=()
@@ -215,16 +232,7 @@ run_web_unit_tests() {
 
   local cov_file="$web/coverage/meridian-web/coverage-summary.json"
   if [[ -f "$cov_file" ]]; then
-    _COVERAGE=$(node -e "
-try {
-  var s = require('$cov_file');
-  var t = s.total;
-  if (t && t.statements && t.statements.total > 0)
-    console.log(Math.round(t.statements.pct));
-  else
-    console.log('N/A');
-} catch(e) { console.log('N/A'); }
-" 2>/dev/null || echo "N/A")
+    _COVERAGE=$(_web_worst_pct "$cov_file")
   else
     _COVERAGE="N/A"
   fi
@@ -305,6 +313,27 @@ for i in "${!SUITE_ORDER[@]}"; do
 
   printf "║  %-6s  %-36s  %8s  %5s  ║\n" "$icon" "$suite" "$cov_str" "$time_str"
 done
+
+# Overall: mean of numeric suite coverages (skipped / N/A excluded).
+OVERALL_SUM=0
+OVERALL_N=0
+for i in "${!SUITE_ORDER[@]}"; do
+  c="${SUITE_COVERAGE[$i]}"
+  st="${SUITE_STATUS[$i]}"
+  [[ "$st" == "SKIP" ]] && continue
+  [[ "$c" == "N/A" ]] && continue
+  [[ "$c" =~ ^[0-9]+$ ]] || continue
+  OVERALL_SUM=$((OVERALL_SUM + c))
+  OVERALL_N=$((OVERALL_N + 1))
+done
+OVERALL_PCT=0
+[[ $OVERALL_N -gt 0 ]] && OVERALL_PCT=$((OVERALL_SUM / OVERALL_N))
+
+if [[ $OVERALL_N -gt 0 ]]; then
+  echo "╠═════════════════════════════════════════════════════════════════╣"
+  printf "║  %-6s  %-36s  %8s  %5s  ║\n" "—" "Overall (mean of suite scores)" "${OVERALL_PCT}%" "-"
+fi
+
 echo "╠═════════════════════════════════════════════════════════════════╣"
 printf "║  %-63s║\n" "  Passed: $PASS_COUNT    Failed: $FAIL_COUNT    Skipped: $SKIP_COUNT"
 echo "╚═════════════════════════════════════════════════════════════════╝"

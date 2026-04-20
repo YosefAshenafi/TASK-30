@@ -67,6 +67,13 @@ describe('AuthStore', () => {
     expect(store.organizationId()).toBe('org-1');
   });
 
+  it('should return null organizationId when field is missing from profile', () => {
+    const raw = JSON.parse(JSON.stringify(mockProfile)) as Record<string, unknown>;
+    delete raw['organizationId'];
+    store.setProfile(raw as unknown as UserProfile);
+    expect(store.organizationId()).toBeNull();
+  });
+
   it('should emit profile via observable', (done) => {
     store.profile$.subscribe(p => {
       if (p !== null) {
@@ -95,5 +102,65 @@ describe('AuthStore', () => {
     expect(store.userId()).toBe(mockProfile.id);
     expect(localStorage.getItem('meridian_access_token')).toBe('access-token-123');
     expect(localStorage.getItem('meridian_refresh_token')).toBe('refresh-token-456');
+  });
+
+  it('should return refreshToken from storage via refreshToken()', () => {
+    expect(store.refreshToken()).toBeNull();
+    store.login('a', 'rt-secret', mockProfile);
+    expect(store.refreshToken()).toBe('rt-secret');
+    store.clearProfile();
+    expect(store.refreshToken()).toBeNull();
+  });
+
+  it('should emit isAuthenticated$ false then true when profile is set', done => {
+    const values: boolean[] = [];
+    const sub = store.isAuthenticated$.subscribe(v => {
+      values.push(v);
+      if (values.length === 2) {
+        expect(values).toEqual([false, true]);
+        sub.unsubscribe();
+        done();
+      }
+    });
+    store.setProfile(mockProfile);
+  });
+
+  it('should emit isAuthenticated$ true then false when profile is cleared', done => {
+    store.setProfile(mockProfile);
+    const values: boolean[] = [];
+    const sub = store.isAuthenticated$.subscribe(v => {
+      values.push(v);
+      if (values.length === 2) {
+        expect(values).toEqual([true, false]);
+        sub.unsubscribe();
+        done();
+      }
+    });
+    store.clearProfile();
+  });
+
+  it('should skip hydrate when meridian_profile is empty string', () => {
+    localStorage.setItem('meridian_profile', '');
+    store.hydrateFromStorage();
+    expect(store.isAuthenticated()).toBeFalse();
+  });
+
+  it('should return null userRole when hydrated JSON omits role', () => {
+    localStorage.setItem(
+      'meridian_profile',
+      JSON.stringify({
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        username: 'u',
+        displayName: 'd',
+        status: 'ACTIVE',
+        organizationId: null,
+        allowedIpRanges: [],
+        lastLoginAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
+      })
+    );
+    store.hydrateFromStorage();
+    expect(store.userRole()).toBeNull();
+    expect(store.isAuthenticated()).toBeTrue();
   });
 });
