@@ -1,0 +1,12 @@
+# Keep build context small — speeds `docker compose build` and avoids flaky uploads.
+node_modules
+npm-debug.log*
+dist
+coverage
+.angular
+.cache
+.git
+.gitignore
+*.md
+.vscode
+.idea

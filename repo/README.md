@@ -4,7 +4,7 @@
 
 ## Overview
 
-Meridian is an on-premise training analytics and management platform that enables organisations to manage training courses, track learner progress, run assessment sessions, and generate compliance reports — all within a single, self-hosted deployment.
+Meridian is an on-premise training analytics and management platform that enables organisations to manage training courses, track learner progress, run assessment sessions, and generate compliance reports — all within a single self-hosted deployment.
 
 ## Tech Stack
 
@@ -13,7 +13,7 @@ Meridian is an on-premise training analytics and management platform that enable
 | Frontend | Angular 18 (TypeScript) |
 | Backend | Spring Boot 3.3 (Java 17) |
 | Database | PostgreSQL 16 |
-| Reverse proxy | nginx 1.25 (HTTPS :443) |
+| Reverse proxy | nginx 1.25 (HTTP; default **:8080** on the host in Docker) |
 | Migrations | Flyway |
 | Runtime | Docker Compose |
 
@@ -32,42 +32,74 @@ cd repo
 # 2. Copy environment template
 cp .env.example .env
 
-# 3. Build and start all services (the nginx image includes a dev self-signed certificate)
-docker compose up --build -d
+# 3. Start everything (builds images automatically on first run)
+docker compose up -d
 ```
 
-Services take 2–5 minutes on first build (Maven compiles the server; Angular bundles the SPA).
+Docker Compose pulls/builds images as needed. The first run can take several minutes (Maven, Angular, images).
+
+The UI is served on **plain HTTP** at **`http://localhost:8080/`** (see `MERIDIAN_HTTP_PORT` in `.env`). No browser TLS warnings. Use HTTPS only in production behind a real certificate.
+
+> **URLs:** Open **`http://localhost:8080/`** — not `https://` (nothing listens on 443). If you use port **80** instead, set `MERIDIAN_HTTP_PORT=80` in `.env` and use `http://localhost/`.
 
 ## Accessing the Application
 
 | URL | Description |
 |-----|-------------|
-| `https://localhost/` | Angular SPA |
-| `https://localhost/api/v1/health` | Server health check |
-| `https://localhost/api/*` | REST API (proxied by nginx) |
-
-> The TLS certificate is self-signed. Accept the browser security warning, or pass `-k` to curl.
+| `http://localhost:8080/` | Angular SPA (default) |
+| `http://localhost:8080/api/v1/health` | Server health check |
+| `http://localhost:8080/api/*` | REST API (proxied by nginx) |
 
 ## Verifying It Works
 
 ```bash
 # 1. Health check — expects {"status":"UP","version":"0.0.1-SNAPSHOT"}
-curl -ks https://localhost/api/v1/health
+curl -s http://localhost:8080/api/v1/health
 
 # 2. Log in as admin and capture the access token
-TOKEN=$(curl -ks -X POST https://localhost/api/v1/auth/login \
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"Admin@123!","deviceFingerprint":"cli-verify"}' \
   | grep -o '"accessToken":"[^"]*"' | cut -d'"' -f4)
 
 # 3. Fetch the authenticated user profile — expects JSON with "username":"admin"
-curl -ks -H "Authorization: Bearer $TOKEN" https://localhost/api/v1/users/me
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/users/me
 ```
 
 **UI smoke check:**
-1. Open `https://localhost/` in your browser and accept the self-signed certificate warning.
+1. Open `http://localhost:8080/` in your browser.
 2. Log in with `admin` / `Admin@123!`.
 3. Confirm the dashboard loads and shows navigation items (Users, Sessions, Reports, Analytics, etc.).
+
+## If you see “connection refused” (ERR_CONNECTION_REFUSED)
+
+1. **Confirm the URL** includes the port: **`http://localhost:8080/`** (default), not `https://` and not plain `http://localhost/` unless you set `MERIDIAN_HTTP_PORT=80`.
+2. **Confirm Docker is running** and containers are up:
+   ```bash
+   docker compose ps
+   ```
+   You should see `repo-nginx-1` **Up** with **`0.0.0.0:8080->80/tcp`** (or your chosen port).
+3. **Start or restart the stack** from the `repo` directory:
+   ```bash
+   docker compose up -d
+   ```
+4. **Try IPv4 explicitly:** `http://127.0.0.1:8080/`
+5. If port **8080** is already in use on your machine, pick another port in `.env`:
+   ```bash
+   echo 'MERIDIAN_HTTP_PORT=9080' >> .env
+   docker compose up -d
+   ```
+   Then open `http://localhost:9080/`.
+
+## If `docker compose build` fails on `npm ci` (ECONNRESET / network)
+
+The web image enables **longer npm timeouts and retries**, plus **one automatic retry** after a short pause. If the registry download still fails (VPN, proxy, or unstable Wi‑Fi), run the build again when the network is stable, or build only the web service after fixing connectivity:
+
+```bash
+docker compose build web
+```
+
+Ensure `web/.dockerignore` is present so the build context does not include `node_modules` or `coverage` (huge tar uploads can also cause failures).
 
 ## Demo Credentials
 
@@ -111,7 +143,7 @@ docker run --rm \
 repo/
 ├── server/           Spring Boot API (Java 17, Maven)
 ├── web/              Angular SPA (TypeScript)
-├── nginx/            Reverse-proxy config (TLS baked into image)
+├── nginx/            Reverse-proxy config (HTTP for local dev)
 ├── scripts/          Utility shell scripts
 ├── api_tests/        MockMvc-based API integration tests
 ├── unit_tests/       Backend (JUnit) and frontend (Jasmine) unit tests
@@ -122,9 +154,9 @@ repo/
 ```
 
 ```
-nginx (HTTPS :443)
- ├── /api/*  → server (Spring Boot :8080)
- └── /*      → web (Angular via nginx :80)
+host :8080 (default) → nginx :80
+ ├── /api/*  → server (Spring Boot :8080 inside the network)
+ └── /*      → web (Angular static nginx :80)
 ```
 
 ## Configuration
@@ -133,6 +165,7 @@ Copy `.env.example` to `.env` and edit as needed. All variables have sensible de
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `MERIDIAN_HTTP_PORT` | Host port mapped to nginx (UI + `/api`) | `8080` |
 | `DB_NAME` | PostgreSQL database name | `meridian` |
 | `DB_USERNAME` | PostgreSQL user | `meridian` |
 | `DB_PASSWORD` | PostgreSQL password | `meridian_secret` |
@@ -148,7 +181,7 @@ Copy `.env.example` to `.env` and edit as needed. All variables have sensible de
 
 | Command | Description |
 |---------|-------------|
-| `docker compose up --build -d` | Build images and start all services |
+| `docker compose up -d` | Build (if needed) and start all services |
 | `docker compose down` | Stop and remove containers |
 | `docker compose logs -f` | Tail all service logs |
 | `docker compose exec postgres psql -U meridian meridian` | Open psql on the database |
@@ -168,7 +201,7 @@ There is no automatic re-encryption on startup — rotation is intentionally man
 
 ## Known Limitations
 
-- TLS certificate is self-signed; browsers will show a security warning. Accept it or import the cert into your trust store.
+- The default Docker setup uses **HTTP** for convenience. Production deployments should terminate **HTTPS** at a load balancer or reverse proxy with a trusted certificate.
 - API integration tests use `MockMvc` (HTTP-like, not real network transport) and mock the security principal via `@WithMockUser` in several suites.
-- E2E tests hit the live stack at `http://localhost:8080` and require `docker compose up` to be running.
+- E2E tests default `API_URL` to `http://localhost:8080`; align that with your `MERIDIAN_HTTP_PORT` or set `API_URL` when the API is only reachable via the nginx proxy port.
 - Backup and recovery-drill features invoke `pg_dump`/`pg_restore` inside the server container; no external backup storage is wired in the default setup.
