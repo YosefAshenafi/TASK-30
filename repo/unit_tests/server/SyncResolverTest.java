@@ -19,6 +19,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -291,6 +292,97 @@ class SyncResolverTest {
 
         assertThat(result.applied()).hasSize(1);
         assertThat(result.applied().get(0).status()).isEqualTo("CREATED");
+    }
+
+    @Test
+    void existingSessionForDifferentUserIsAccessDenied() {
+        UUID id = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID otherUser = UUID.randomUUID();
+        Instant ts = Instant.now();
+
+        TrainingSession existing = new TrainingSession();
+        existing.setId(id);
+        existing.setStudentId(otherUser);
+        existing.setClientUpdatedAt(ts.minusSeconds(60));
+        existing.setStatus("IN_PROGRESS");
+
+        SyncRequest.SessionSyncItem item = buildSessionItem(id, ts);
+
+        when(idempotencyService.hashBody(anyString())).thenReturn("hash-ad");
+        when(idempotencyService.check(anyString(), eq("hash-ad"), any())).thenReturn(Optional.empty());
+        when(sessionRepo.findByIdAndDeletedAtIsNull(id)).thenReturn(Optional.of(existing));
+
+        SyncResult result = resolver.resolve(new SyncRequest(List.of(item), List.of()), userId);
+
+        assertThat(result.conflicts()).hasSize(1);
+        assertThat(result.conflicts().get(0).reason()).isEqualTo("ACCESS_DENIED");
+        verify(sessionRepo, never()).save(any());
+    }
+
+    @Test
+    void setSyncWhenSessionMissing_isAccessDenied() {
+        UUID sessionId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        SyncRequest.SetSyncItem item = buildSetItem(sessionId, Instant.now());
+
+        when(idempotencyService.hashBody(anyString())).thenReturn("set-ad1");
+        when(idempotencyService.check(anyString(), eq("set-ad1"), any())).thenReturn(Optional.empty());
+        when(sessionRepo.findByIdAndDeletedAtIsNull(sessionId)).thenReturn(Optional.empty());
+
+        SyncResult result = resolver.resolve(new SyncRequest(List.of(), List.of(item)), userId);
+
+        assertThat(result.conflicts()).hasSize(1);
+        assertThat(result.conflicts().get(0).reason()).isEqualTo("ACCESS_DENIED");
+    }
+
+    @Test
+    void setSyncWhenSessionBelongsToAnotherUser_isAccessDenied() {
+        UUID sessionId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID otherUser = UUID.randomUUID();
+        SyncRequest.SetSyncItem item = buildSetItem(sessionId, Instant.now());
+
+        TrainingSession ownerSession = new TrainingSession();
+        ownerSession.setId(sessionId);
+        ownerSession.setStudentId(otherUser);
+
+        when(idempotencyService.hashBody(anyString())).thenReturn("set-ad2");
+        when(idempotencyService.check(anyString(), eq("set-ad2"), any())).thenReturn(Optional.empty());
+        when(sessionRepo.findByIdAndDeletedAtIsNull(sessionId)).thenReturn(Optional.of(ownerSession));
+
+        SyncResult result = resolver.resolve(new SyncRequest(List.of(), List.of(item)), userId);
+
+        assertThat(result.conflicts()).hasSize(1);
+        assertThat(result.conflicts().get(0).reason()).isEqualTo("ACCESS_DENIED");
+    }
+
+    @Test
+    void idempotencyNonConflictRethrows() {
+        UUID id = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        SyncRequest.SessionSyncItem item = buildSessionItem(id, Instant.now());
+
+        when(idempotencyService.hashBody(anyString())).thenReturn("hash-re");
+        when(idempotencyService.check(anyString(), eq("hash-re"), any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTHER"));
+
+        assertThrows(ResponseStatusException.class,
+                () -> resolver.resolve(new SyncRequest(List.of(item), List.of()), userId));
+    }
+
+    @Test
+    void setIdempotencyNonConflictRethrows() {
+        UUID sessionId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        SyncRequest.SetSyncItem item = buildSetItem(sessionId, Instant.now());
+
+        when(idempotencyService.hashBody(anyString())).thenReturn("set-re");
+        when(idempotencyService.check(anyString(), eq("set-re"), any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTHER"));
+
+        assertThrows(ResponseStatusException.class,
+                () -> resolver.resolve(new SyncRequest(List.of(), List.of(item)), userId));
     }
 
     @Test

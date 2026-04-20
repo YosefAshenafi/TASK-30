@@ -71,8 +71,6 @@ services:
         condition: service_healthy
       web:
         condition: service_healthy
-    volumes:
-      - ./nginx/certs:/etc/nginx/certs:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -kfsS https://localhost/ || exit 1"]
       interval: 30s

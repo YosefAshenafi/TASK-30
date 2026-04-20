@@ -44,7 +44,7 @@ public class SyncResolver {
 
             Optional<TrainingSessionDto> cached;
             try {
-                cached = idempotencyService.check(item.idempotencyKey(), userId, hash, TrainingSessionDto.class);
+                cached = idempotencyService.check(item.idempotencyKey(), hash, TrainingSessionDto.class);
             } catch (ResponseStatusException e) {
                 if (e.getStatusCode() == HttpStatus.CONFLICT) {
                     Optional<TrainingSession> existing = sessionRepo.findByIdAndDeletedAtIsNull(item.id());
@@ -93,7 +93,7 @@ public class SyncResolver {
 
             Optional<SessionSetDto> cached;
             try {
-                cached = idempotencyService.check(item.idempotencyKey(), userId, hash, SessionSetDto.class);
+                cached = idempotencyService.check(item.idempotencyKey(), hash, SessionSetDto.class);
             } catch (ResponseStatusException e) {
                 if (e.getStatusCode() == HttpStatus.CONFLICT) {
                     Optional<SessionActivitySet> existing = setRepo.findBySessionIdAndActivityIdAndSetIndex(

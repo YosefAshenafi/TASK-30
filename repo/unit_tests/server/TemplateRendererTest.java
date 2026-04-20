@@ -40,8 +40,9 @@ class TemplateRendererTest {
 
         String html = renderer.renderToHtml(template, vars);
 
-        assertFalse(html.contains(" onerror="),
-                "rendered HTML must not contain a raw onerror attribute: " + html);
+        // Ensure no HTML tag contains a raw event-handler attribute.
+        assertFalse(html.matches("(?is).*<[^>]+\\son\\w+\\s*=.*"),
+                "rendered HTML must not contain raw event-handler attributes: " + html);
     }
 
     @Test

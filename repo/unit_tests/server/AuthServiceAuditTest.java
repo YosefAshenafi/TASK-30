@@ -1,5 +1,6 @@
 package com.meridian.auth;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.meridian.auth.dto.LoginRequest;
 import com.meridian.auth.entity.User;
 import com.meridian.auth.repository.RefreshTokenRepository;
@@ -54,10 +55,11 @@ class AuthServiceAuditTest {
         passwordEncoder = Mockito.mock(PasswordEncoder.class);
         JwtService jwtService = Mockito.mock(JwtService.class);
         DeviceFingerprintService deviceFingerprintService = Mockito.mock(DeviceFingerprintService.class);
+        ObjectMapper objectMapper = new ObjectMapper();
 
         authService = new AuthService(userRepository, refreshTokenRepository, organizationRepository,
                 allowedIpRangeRepository, anomalyEventRepository, auditEventRepository, auditEventPublisher,
-                notificationService, passwordEncoder, jwtService, deviceFingerprintService);
+                notificationService, passwordEncoder, jwtService, deviceFingerprintService, objectMapper);
 
         when(allowedIpRangeRepository.countRulesForRole(any())).thenReturn(0L);
         when(jwtService.issueAccessToken(any(), any(), any())).thenReturn("mock.jwt.token");

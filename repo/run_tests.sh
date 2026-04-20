@@ -11,9 +11,9 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN_E2E=false
 [[ "${1:-}" == "--e2e" ]] && RUN_E2E=true
 
-# Use Java 21 for Maven — the system default may be a newer JDK incompatible with Lombok.
-_java21=$(/usr/libexec/java_home -v 21 2>/dev/null || true)
-[[ -n "$_java21" ]] && export JAVA_HOME="$_java21"
+# Prefer Temurin 17 on macOS — matches CI and Spring Boot 3 baseline.
+_java17=$(/usr/libexec/java_home -v 17 2>/dev/null || true)
+[[ -n "$_java17" ]] && export JAVA_HOME="$_java17"
 
 COV_THRESHOLD=90
 
@@ -198,6 +198,14 @@ run_web_unit_tests() {
        s|../../web/src/app/core/db/|../core/db/|g" \
       "$REPO/unit_tests/web/session-sync-keys.spec.ts" > "$sessions_dest/session-sync-keys.spec.ts"
   copied+=("$sessions_dest/session-sync-keys.spec.ts")
+
+  if [[ ! -x "$web/node_modules/.bin/ng" ]]; then
+    echo "  Installing web dependencies (npm ci)…"
+    if ! (cd "$web" && npm ci --legacy-peer-deps 2>&1); then
+      echo "  ✗ npm ci failed"
+      return 1
+    fi
+  fi
 
   local result=0
   (cd "$web" && ./node_modules/.bin/ng test --watch=false --browsers=ChromeHeadlessCI \

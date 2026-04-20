@@ -305,6 +305,68 @@ class AuthApiTest {
             .andExpect(jsonPath("$.error.code").value("REFRESH_TOKEN_REUSE"));
     }
 
+    @Test
+    @Order(17)
+    void loginFromTrustedProxyWithBlankXForwardedFor_usesRemoteAddr() throws Exception {
+        String body = """
+            {
+              "username": "admin",
+              "password": "Admin@123!",
+              "deviceFingerprint": "fp-blank-xff"
+            }
+            """;
+        mockMvc.perform(post(LOGIN_URL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("X-Forwarded-For", "   ")
+                .content(body))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
+
+    @Test
+    @Order(18)
+    void loginFrom172PrivateSubnet_usesXForwardedForClientIp() throws Exception {
+        String body = """
+            {
+              "username": "admin",
+              "password": "Admin@123!",
+              "deviceFingerprint": "fp-172-private"
+            }
+            """;
+        mockMvc.perform(post(LOGIN_URL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("X-Forwarded-For", "198.51.100.22, 10.0.0.2")
+                .with(request -> {
+                    request.setRemoteAddr("172.20.5.1");
+                    return request;
+                })
+                .content(body))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
+
+    @Test
+    @Order(19)
+    void loginFromNonRfc1918Remote_ignoresXForwardedFor() throws Exception {
+        String body = """
+            {
+              "username": "admin",
+              "password": "Admin@123!",
+              "deviceFingerprint": "fp-untrusted-remote"
+            }
+            """;
+        mockMvc.perform(post(LOGIN_URL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("X-Forwarded-For", "198.51.100.50")
+                .with(request -> {
+                    request.setRemoteAddr("198.51.100.99");
+                    return request;
+                })
+                .content(body))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
+
     private void assumeRefreshTokenAvailable() {
         assumeThat(savedRefreshToken).isNotNull();
     }

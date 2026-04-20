@@ -5,6 +5,7 @@ import com.meridian.common.web.ErrorEnvelope;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -54,6 +55,7 @@ public class SecurityConfig {
                                 "/api/v1/health",
                                 "/actuator/health"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/sessions").hasRole("STUDENT")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
