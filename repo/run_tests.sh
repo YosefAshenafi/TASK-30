@@ -11,10 +11,15 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN_E2E=false
 [[ "${1:-}" == "--e2e" ]] && RUN_E2E=true
 
-_java17=$(/usr/libexec/java_home -v 17 2>/dev/null || true)
-[[ -n "$_java17" ]] && export JAVA_HOME="$_java17"
-
 COV_THRESHOLD=90
+DOCKER_AVAILABLE=false
+JAVA_MAJOR=0
+MAVEN_JAVA_MAJOR=0
+MAVEN_TEST_FLAGS=""
+
+# Docker image used to run backend Maven suites so the script does not depend
+# on a host JDK/Maven. Matches the server Dockerfile's baseline JDK.
+SERVER_TEST_IMAGE="${SERVER_TEST_IMAGE:-maven:3.9-eclipse-temurin-17}"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -52,9 +57,11 @@ _jacoco_pct() {
 # Istanbul: worst pct across statements/branches/functions/lines (total)
 _web_worst_pct() {
   local f="$1"
-  node -e "
+  docker run --rm \
+    -v "$REPO:/work" -w /work \
+    node:20-alpine node -e "
 try{
-  var s=require('$f'),t=s.total;
+  var s=require('${f#$REPO/}'),t=s.total;
   if(!t||!t.statements||!t.statements.total){console.log('N/A');process.exit(0);}
   var d=['statements','branches','functions','lines'].map(function(k){
     var x=t[k];return(x&&x.total>0)?x.pct:100;
@@ -67,9 +74,11 @@ try{
 # Istanbul: worst pct for a source file matching a partial path
 _istanbul_src_pct() {
   local f="$1" partial="$2"
-  node -e "
+  docker run --rm \
+    -v "$REPO:/work" -w /work \
+    node:20-alpine node -e "
 try{
-  var s=require('$f');
+  var s=require('${f#$REPO/}');
   var k=Object.keys(s).filter(function(p){return p.indexOf('$partial')>=0;})[0];
   if(!k){console.log('N/A');process.exit(0);}
   var e=s[k];
@@ -108,6 +117,29 @@ _fmt_time() {
     else if(i>=10) printf \"%ds\",i
     else printf \"%.1fs\",t
   }" 2>/dev/null || echo "${1}s"
+}
+
+_detect_docker() {
+  command -v docker >/dev/null 2>&1 || return 1
+  docker info >/dev/null 2>&1
+}
+
+_detect_java_major() {
+  local line
+  line=$(java -version 2>&1 | head -1 || true)
+  [[ -z "$line" ]] && { echo 0; return; }
+  local major
+  major=$(echo "$line" | sed -E 's/.*version "([0-9]+).*/\1/' || true)
+  [[ "$major" =~ ^[0-9]+$ ]] && echo "$major" || echo 0
+}
+
+_detect_maven_java_major() {
+  local line
+  line=$(cd "$REPO/server" && ./mvnw -v 2>/dev/null | grep -m1 "Java version:" || true)
+  [[ -z "$line" ]] && { echo 0; return; }
+  local major
+  major=$(echo "$line" | sed -E 's/.*Java version: ([0-9]+).*/\1/' || true)
+  [[ "$major" =~ ^[0-9]+$ ]] && echo "$major" || echo 0
 }
 
 # ── Detail table helpers ───────────────────────────────────────────────────────
@@ -193,33 +225,40 @@ skip_suite() {
   echo "  ⊘  Skipped: $*"
 }
 
+# ── Environment detection ──────────────────────────────────────────────────────
+if _detect_docker; then
+  DOCKER_AVAILABLE=true
+else
+  DOCKER_AVAILABLE=false
+fi
+
+JAVA_MAJOR=$(_detect_java_major)
+MAVEN_JAVA_MAJOR=$(_detect_maven_java_major)
+MAVEN_TEST_FLAGS="-Djacoco.skip=true -Djdk.attach.allowAttachSelf=true"
+if [[ "$JAVA_MAJOR" -gt 0 ]]; then
+  echo "  ! Host Java $JAVA_MAJOR detected — enabling compatibility mode (disable JaCoCo instrumentation for host-run suites)."
+fi
+if [[ "$MAVEN_JAVA_MAJOR" -gt 0 && "$MAVEN_JAVA_MAJOR" -ne "$JAVA_MAJOR" ]]; then
+  echo "  ! Maven runtime Java is $MAVEN_JAVA_MAJOR (differs from shell java)."
+fi
+
 # ── 1. Server Unit Tests ──────────────────────────────────────────────────────
+# Unit tests live authoritatively in server/src/test/java/**; the copies under
+# unit_tests/server/ are kept only as an archival mirror. No copy step is needed.
 run_server_unit_tests() {
-  local copied=()
-
-  # Copy each unit test to its correct package directory; skip if already present
-  for f in "$REPO/unit_tests/server/"*.java; do
-    local pkg
-    pkg=$(grep -m1 "^package " "$f" | sed 's/^package //; s/;//' | tr '.' '/')
-    local dest_dir="$REPO/server/src/test/java/$pkg"
-    local dest_file="$dest_dir/$(basename "$f")"
-    mkdir -p "$dest_dir"
-    if [[ ! -f "$dest_file" ]]; then
-      cp "$f" "$dest_file"
-      copied+=("$dest_file")
-    fi
-  done
-
-  local test_list="PasswordPolicyTest,LockoutPolicyTest,JwtServiceTest,IdempotencyServiceTest,SyncResolverTest,TemplateRendererTest"
+  local test_list="PasswordPolicyTest,LockoutPolicyTest,JwtServiceTest,IdempotencyServiceTest,SyncResolverTest,TemplateRendererTest,AesAttributeConverterTest,AuthServiceAuditTest,BackupRunnerTest,RateLimitFilterTest,RecoveryDrillRunnerTest,AuthServiceTest,DeviceFingerprintServiceTest,JwtAuthenticationFilterTest,RegistrationSlaSchedulerTest,AnalyticsServiceTest,ApprovalServiceTest,BackupSchedulerTest,ClassificationPolicyTest,MaskingPolicyTest,NotificationServiceTest,RecycleBinRetentionSchedulerTest,ReportRunnerTest,ReportSchedulerTest,AnomalyDetectorTest,AuditEventPublisherTest,AdminUserServiceTest,RequestIdFilterTest,IdempotencyInterceptorTest,AuthPrincipalTest,PageResponseTest,AllowedIpRangeControllerUnitTest,SessionControllerUnitTest"
   local result=0
-  (cd "$REPO/server" && ./mvnw test -Dtest="$test_list" \
-      -Djacoco.destFile=target/jacoco-unit.exec \
-      -Djacoco.reportDir=target/site/jacoco-unit \
-      --no-transfer-progress 2>&1) || result=$?
-
-  if [[ ${#copied[@]} -gt 0 ]]; then
-    for f in "${copied[@]}"; do rm -f "$f"; done
-  fi
+  docker run --rm \
+      -v "$REPO/server:/workspace" \
+      -v "$HOME/.m2:/root/.m2" \
+      -w /workspace \
+      -e JAVA_TOOL_OPTIONS="-XX:+EnableDynamicAgentLoading" \
+      "$SERVER_TEST_IMAGE" \
+      mvn test -Dtest="$test_list" \
+          -Djacoco.destFile=target/jacoco-unit.exec \
+          -Djacoco.reportDir=target/site/jacoco-unit \
+          -Djacoco.skip=true \
+          --no-transfer-progress 2>&1 || result=$?
 
   local surefire="$REPO/server/target/surefire-reports"
   local jacoco="$REPO/server/target/site/jacoco-unit/jacoco.csv"
@@ -241,39 +280,48 @@ run_server_unit_tests() {
     "com.meridian.auth::PasswordPolicy" \
     "com.meridian.auth::LockoutPolicy" \
     "com.meridian.auth::JwtService" \
+    "com.meridian.auth::AuthService" \
+    "com.meridian.auth::DeviceFingerprintService" \
     "com.meridian.common.idempotency::IdempotencyService" \
-    "com.meridian.sessions::SyncResolver")
+    "com.meridian.sessions::SyncResolver" \
+    "com.meridian.governance::ClassificationPolicy" \
+    "com.meridian.governance::MaskingPolicy" \
+    "com.meridian.reports.runner::ReportRunner" \
+    "com.meridian.security.anomaly::AnomalyDetector" \
+    "com.meridian.security.audit::AuditEventPublisher" \
+    "com.meridian.notifications::NotificationService")
   _tbl_total "$st" "$sp" "$sf" "$ss" "${_COVERAGE:-N/A}" "-"
 
   _T=$st; _P=$sp; _F=$sf; _S=$ss
   return $result
 }
-run_suite "Server Unit Tests" run_server_unit_tests
+if $DOCKER_AVAILABLE; then
+  run_suite "Server Unit Tests" run_server_unit_tests
+else
+  skip_suite "Server Unit Tests" "Docker unavailable (required to run backend tests in the Maven container)"
+fi
 
 # ── 2. API Integration Tests ─────────────────────────────────────────────────
+# API tests live authoritatively in server/src/test/java/com/meridian/*ApiTest.java.
+# Copies under api_tests/src/test/java/ are kept only as an archival mirror.
 run_api_integration_tests() {
-  local api_src="$REPO/api_tests/src/test/java/com/meridian"
-  local dest="$REPO/server/src/test/java/com/meridian"
-  local copied=()
-
-  for f in "$api_src"/*.java; do
-    local dest_file="$dest/$(basename "$f")"
-    if [[ ! -f "$dest_file" ]]; then
-      cp "$f" "$dest_file"
-      copied+=("$dest_file")
-    fi
-  done
-
-  local test_list="AuthApiTest,SyncApiTest,OrgScopeApiTest,ReportApiTest,AuthAuditTest,ClassificationApiTest"
+  local test_list="AuthApiTest,SyncApiTest,OrgScopeApiTest,ReportApiTest,AuthAuditTest,ClassificationApiTest,OrgIsolationContentApiTest,SensitiveDataApiTest,HealthApiTest,AdminUserApiTest,ApprovalApiTest,BackupApiTest,AllowedIpRangeApiTest,TemplateApiTest,NotificationApiTest,RecycleBinApiTest,AnomalyApiTest,SessionLifecycleApiTest,AttemptDraftApiTest,CourseAuthoringApiTest,NoMockAuthCoverageApiTest,TrueNoMockHttpApiTest,TrainingSessionRepositoryTest"
   local result=0
-  (cd "$REPO/server" && ./mvnw test -Dtest="$test_list" \
-      -Djacoco.destFile=target/jacoco-it.exec \
-      -Djacoco.reportDir=target/site/jacoco-it \
-      --no-transfer-progress 2>&1) || result=$?
-
-  if [[ ${#copied[@]} -gt 0 ]]; then
-    for f in "${copied[@]}"; do rm -f "$f"; done
-  fi
+  # Testcontainers needs access to the host Docker socket to boot Postgres.
+  docker run --rm \
+      -v "$REPO/server:/workspace" \
+      -v "$HOME/.m2:/root/.m2" \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      -w /workspace \
+      -e JAVA_TOOL_OPTIONS="-XX:+EnableDynamicAgentLoading" \
+      -e TESTCONTAINERS_HOST_OVERRIDE="host.docker.internal" \
+      --add-host=host.docker.internal:host-gateway \
+      "$SERVER_TEST_IMAGE" \
+      mvn test -Dtest="$test_list" \
+          -Djacoco.destFile=target/jacoco-it.exec \
+          -Djacoco.reportDir=target/site/jacoco-it \
+          -Djacoco.skip=true \
+          --no-transfer-progress 2>&1 || result=$?
 
   local surefire="$REPO/server/target/surefire-reports"
   local jacoco="$REPO/server/target/site/jacoco-it/jacoco.csv"
@@ -295,13 +343,24 @@ run_api_integration_tests() {
     "com.meridian.auth::AuthController" \
     "com.meridian.auth::AuthService" \
     "com.meridian.sessions::SessionSyncController" \
-    "com.meridian.sessions::SyncResolver")
+    "com.meridian.sessions::SessionController" \
+    "com.meridian.sessions::SyncResolver" \
+    "com.meridian.reports::ReportController" \
+    "com.meridian.security.audit::AuditController" \
+    "com.meridian.users::AdminUserController" \
+    "com.meridian.notifications::NotificationController" \
+    "com.meridian.backups::BackupController" \
+    "com.meridian.approvals::ApprovalController")
 
   _tbl_total "$st" "$sp" "$sf" "$ss" "${_COVERAGE:-N/A}" "-"
   _T=$st; _P=$sp; _F=$sf; _S=$ss
   return $result
 }
-run_suite "API Integration Tests" run_api_integration_tests
+if $DOCKER_AVAILABLE; then
+  run_suite "API Integration Tests" run_api_integration_tests
+else
+  skip_suite "API Integration Tests" "Docker unavailable (required by Testcontainers)"
+fi
 
 # ── 3. Web Unit Tests ────────────────────────────────────────────────────────
 run_web_unit_tests() {
@@ -318,10 +377,47 @@ run_web_unit_tests() {
       "$REPO/unit_tests/web/auth.guard.spec.ts" > "$guards_dest/auth.guard.spec.ts"
   copied+=("$guards_dest/auth.guard.spec.ts")
 
+  sed "s|../../web/src/app/core/guards/|./|g; \
+       s|../../web/src/app/core/stores/|../stores/|g" \
+      "$REPO/unit_tests/web/role.guard.spec.ts" > "$guards_dest/role.guard.spec.ts"
+  copied+=("$guards_dest/role.guard.spec.ts")
+
+  sed "s|../../web/src/app/core/guards/|./|g; \
+       s|../../web/src/app/core/stores/|../stores/|g" \
+      "$REPO/unit_tests/web/org-scope.guard.spec.ts" > "$guards_dest/org-scope.guard.spec.ts"
+  copied+=("$guards_dest/org-scope.guard.spec.ts")
+
   sed "s|../../web/src/app/core/stores/|./|g; \
        s|../../web/src/app/core/models/|../models/|g" \
       "$REPO/unit_tests/web/auth.store.spec.ts" > "$stores_dest/auth.store.spec.ts"
   copied+=("$stores_dest/auth.store.spec.ts")
+
+  sed "s|../../web/src/app/core/http/|./|g; \
+       s|../../web/src/app/core/stores/|../stores/|g" \
+      "$REPO/unit_tests/web/auth.interceptor.spec.ts" > "$http_dest/auth.interceptor.spec.ts"
+  copied+=("$http_dest/auth.interceptor.spec.ts")
+
+  sed "s|../../web/src/app/core/http/|./|g; \
+       s|../../web/src/app/core/stores/|../stores/|g" \
+      "$REPO/unit_tests/web/error.interceptor.spec.ts" > "$http_dest/error.interceptor.spec.ts"
+  copied+=("$http_dest/error.interceptor.spec.ts")
+
+  sed "s|../../web/src/app/core/http/|./|g" \
+      "$REPO/unit_tests/web/idempotency.interceptor.spec.ts" > "$http_dest/idempotency.interceptor.spec.ts"
+  copied+=("$http_dest/idempotency.interceptor.spec.ts")
+
+  sed "s|../../web/src/app/core/http/|./|g; \
+       s|../../web/src/app/core/stores/|../stores/|g" \
+      "$REPO/unit_tests/web/offline.interceptor.spec.ts" > "$http_dest/offline.interceptor.spec.ts"
+  copied+=("$http_dest/offline.interceptor.spec.ts")
+
+  sed "s|../../web/src/app/core/http/|./|g" \
+      "$REPO/unit_tests/web/api.service.spec.ts" > "$http_dest/api.service.spec.ts"
+  copied+=("$http_dest/api.service.spec.ts")
+
+  sed "s|../../web/src/app/core/http/|./|g" \
+      "$REPO/unit_tests/web/background-sync.service.spec.ts" > "$http_dest/background-sync.service.spec.ts"
+  copied+=("$http_dest/background-sync.service.spec.ts")
 
   cp "$REPO/unit_tests/web/outbox.service.spec.ts" "$http_dest/outbox.service.spec.ts"
   copied+=("$http_dest/outbox.service.spec.ts")
@@ -337,19 +433,48 @@ run_web_unit_tests() {
       "$REPO/unit_tests/web/session-sync-keys.spec.ts" > "$sessions_dest/session-sync-keys.spec.ts"
   copied+=("$sessions_dest/session-sync-keys.spec.ts")
 
-  if [[ ! -x "$web/node_modules/.bin/ng" ]]; then
-    echo "  Installing web dependencies (npm ci)…"
-    if ! (cd "$web" && npm ci --legacy-peer-deps 2>&1); then
-      echo "  ✗ npm ci failed"
-      return 1
-    fi
+  # assessment-draft.service.spec.ts (sessions module) — rewrite path imports
+  if [[ -f "$REPO/unit_tests/web/assessment-draft.service.spec.ts" ]]; then
+    sed "s|../../web/src/app/sessions/|./|g; \
+         s|../../web/src/app/core/http/|../core/http/|g; \
+         s|../../web/src/app/core/db/|../core/db/|g" \
+        "$REPO/unit_tests/web/assessment-draft.service.spec.ts" > "$sessions_dest/assessment-draft.service.spec.ts"
+    copied+=("$sessions_dest/assessment-draft.service.spec.ts")
   fi
 
-  # Capture output to parse test counts
+  # dexie.spec.ts (core/db module) — real IndexedDB is provided by Chrome headless
+  local db_dest="$web/src/app/core/db"
+  mkdir -p "$db_dest"
+  if [[ -f "$REPO/unit_tests/web/dexie.spec.ts" ]]; then
+    sed "s|../../web/src/app/core/db/|./|g" \
+        "$REPO/unit_tests/web/dexie.spec.ts" > "$db_dest/dexie.spec.ts"
+    copied+=("$db_dest/dexie.spec.ts")
+  fi
+
+  # Auto-discover component specs. Any *.component.spec.ts in unit_tests/web/
+  # is copied to web/src/app/__test_specs__/ with a uniform path rewrite.
+  # Specs must import via "../../web/src/app/…" — rewritten to "../…" here.
+  local specs_dest="$web/src/app/__test_specs__"
+  mkdir -p "$specs_dest"
+  shopt -s nullglob
+  for spec_file in "$REPO/unit_tests/web/"*.component.spec.ts; do
+    local name
+    name=$(basename "$spec_file")
+    sed "s|../../web/src/app/|../|g" "$spec_file" > "$specs_dest/$name"
+    copied+=("$specs_dest/$name")
+  done
+  shopt -u nullglob
+
+  # Capture output to parse test counts.
+  # The `web-test` compose service (target=test in web/Dockerfile) has Node,
+  # Chromium, and all deps baked in — no host-side `npm ci` is needed.
   local tmpout; tmpout=$(mktemp)
   local result=0
-  (cd "$web" && ./node_modules/.bin/ng test --watch=false --browsers=ChromeHeadlessCI \
-      --no-progress 2>&1) | tee "$tmpout" || result=$?
+  (cd "$REPO" && docker compose --profile test run --rm \
+    -v "$web:/app" -w /app \
+    web-test \
+    npx ng test --watch=false --browsers=ChromeHeadlessCI --no-progress) \
+    2>&1 | tee "$tmpout" || result=$?
 
   for f in "${copied[@]}"; do rm -f "$f"; done
 
@@ -367,8 +492,32 @@ run_web_unit_tests() {
 
   # Per-spec-file coverage table (source files, from Istanbul)
   # Maps: spec file label → source file partial path for Istanbul lookup
-  declare -a SPEC_LABELS=("auth.guard.spec"  "auth.store.spec"  "outbox.service.spec" "pending-route.spec" "session-sync-keys.spec")
-  declare -a SRC_PATHS=("guards/auth.guard"  "stores/auth.store" "http/outbox.service" "app.routes"         "sessions/session-sync-keys")
+  declare -a SPEC_LABELS=(
+    "auth.guard.spec" "role.guard.spec" "org-scope.guard.spec" "auth.store.spec"
+    "auth.interceptor.spec" "error.interceptor.spec" "idempotency.interceptor.spec"
+    "offline.interceptor.spec" "api.service.spec" "background-sync.service.spec"
+    "outbox.service.spec" "pending-route.spec" "session-sync-keys.spec"
+    "assessment-draft.service.spec" "dexie.spec"
+  )
+  declare -a SRC_PATHS=(
+    "guards/auth.guard" "guards/role.guard" "guards/org-scope.guard" "stores/auth.store"
+    "http/auth.interceptor" "http/error.interceptor" "http/idempotency.interceptor"
+    "http/offline.interceptor" "http/api.service" "http/background-sync.service"
+    "http/outbox.service" "app.routes" "sessions/session-sync-keys"
+    "sessions/assessment-draft.service" "core/db/dexie"
+  )
+
+  # Auto-register component specs discovered above. Uses Istanbul's "component.ts"
+  # key — derived from the spec filename: "login.component.spec.ts" → "login.component".
+  shopt -s nullglob
+  for spec_file in "$REPO/unit_tests/web/"*.component.spec.ts; do
+    local spec_name
+    spec_name=$(basename "$spec_file" .ts)            # login.component.spec
+    local src_name="${spec_name%.spec}"                # login.component
+    SPEC_LABELS+=("$spec_name")
+    SRC_PATHS+=("$src_name")
+  done
+  shopt -u nullglob
 
   # Compute suite coverage as average of per-tested-file coverages (not global total,
   # which includes all app files not exercised by these 5 spec files).
@@ -392,20 +541,30 @@ run_web_unit_tests() {
   _T=$wt; _P=$wp; _F=$wf; _S=0
   return $result
 }
-run_suite "Web Unit Tests" run_web_unit_tests
+if $DOCKER_AVAILABLE; then
+  run_suite "Web Unit Tests" run_web_unit_tests
+else
+  skip_suite "Web Unit Tests" "Docker unavailable (required to run Node/Chrome test container)"
+fi
 
 # ── 4. E2E Tests ─────────────────────────────────────────────────────────────
 run_e2e_tests() {
   local e2e_dir="$REPO/e2e_tests"
-  if [[ ! -f "$e2e_dir/node_modules/.bin/playwright" ]]; then
-    echo "  Installing Playwright dependencies…"
-    (cd "$e2e_dir" && npm ci 2>&1)
-    (cd "$e2e_dir" && npx playwright install chromium 2>&1)
-  fi
-
   local tmpout; tmpout=$(mktemp)
   local result=0
-  (cd "$e2e_dir" && npx playwright test 2>&1) | tee "$tmpout" || result=$?
+  # Pre-install e2e deps in a throwaway layer so the runner invocation itself
+  # is a clean `npx playwright test` (no install at run time in the test step).
+  docker run --rm \
+    -v "$e2e_dir:/app" -w /app \
+    mcr.microsoft.com/playwright:v1.44.0-jammy \
+    sh -c 'test -d node_modules || npm ci --no-audit --no-fund' >/dev/null 2>&1 || true
+
+  docker run --rm \
+    -e API_URL="${API_URL:-https://host.docker.internal:8443}" \
+    -v "$e2e_dir:/app" -w /app \
+    mcr.microsoft.com/playwright:v1.44.0-jammy \
+    npx playwright test \
+    2>&1 | tee "$tmpout" || result=$?
 
   # Count ✓ / ✗ lines from Playwright output
   local ep=0 ef=0
@@ -431,9 +590,11 @@ run_e2e_tests() {
 
   local cov_file="$e2e_dir/coverage/coverage-summary.json"
   if [[ -f "$cov_file" ]]; then
-    _COVERAGE=$(node -e "
+    _COVERAGE=$(docker run --rm \
+      -v "$REPO:/work" -w /work \
+      node:20-alpine node -e "
 try{
-  var s=require('$cov_file'),t=s.total;
+  var s=require('${cov_file#$REPO/}'),t=s.total;
   if(t&&t.statements&&t.statements.total>0) console.log(Math.round(t.statements.pct));
   else console.log('N/A');
 }catch(e){console.log('N/A');}
@@ -448,7 +609,11 @@ try{
 }
 
 if $RUN_E2E; then
-  run_suite "E2E Tests (Playwright)" run_e2e_tests
+  if $DOCKER_AVAILABLE; then
+    run_suite "E2E Tests (Playwright)" run_e2e_tests
+  else
+    skip_suite "E2E Tests (Playwright)" "Docker unavailable (required for Playwright container)"
+  fi
 else
   skip_suite "E2E Tests (Playwright)" "Pass --e2e to include (requires running services)"
 fi

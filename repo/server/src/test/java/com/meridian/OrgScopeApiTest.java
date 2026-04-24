@@ -35,12 +35,17 @@ class OrgScopeApiTest {
     @Order(1)
     @WithMockUser(username = OTHER_STUDENT, roles = "STUDENT")
     void student_cannotListOtherStudentSessions() throws Exception {
-        // Sessions are scoped to the authenticated student — no foreign student IDs may appear
+        // Sessions are scoped to the authenticated student — no foreign student IDs may appear,
+        // AND paging envelope must be well-formed so clients can pass it back.
         mockMvc.perform(get("/api/v1/sessions?size=100"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content").isArray())
             // STUDENT_USER's sessions must never appear in OTHER_STUDENT's results
-            .andExpect(jsonPath("$.content[?(@.studentId == '" + STUDENT_USER + "')]").isEmpty());
+            .andExpect(jsonPath("$.content[?(@.studentId == '" + STUDENT_USER + "')]").isEmpty())
+            // Page envelope assertions — clients consume these for pagination controls
+            .andExpect(jsonPath("$.page").exists())
+            .andExpect(jsonPath("$.size").value(100))
+            .andExpect(jsonPath("$.total").isNumber());
     }
 
     @Test
@@ -76,8 +81,10 @@ class OrgScopeApiTest {
     @Order(4)
     @WithMockUser(username = STUDENT_USER, roles = "STUDENT")
     void student_cannotAccessAdminUsers() throws Exception {
+        // Q-1 remediation: status + error-envelope body assertion
         mockMvc.perform(get("/api/v1/admin/users"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     @Test
@@ -85,7 +92,8 @@ class OrgScopeApiTest {
     @WithMockUser(username = STUDENT_USER, roles = "STUDENT")
     void student_cannotAccessAdminAudit() throws Exception {
         mockMvc.perform(get("/api/v1/admin/audit"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     @Test
@@ -93,7 +101,8 @@ class OrgScopeApiTest {
     @WithMockUser(username = STUDENT_USER, roles = "STUDENT")
     void student_cannotAccessAdminApprovals() throws Exception {
         mockMvc.perform(get("/api/v1/admin/approvals"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     @Test
@@ -101,7 +110,8 @@ class OrgScopeApiTest {
     @WithMockUser(username = STUDENT_USER, roles = "STUDENT")
     void student_cannotAccessAdminBackups() throws Exception {
         mockMvc.perform(get("/api/v1/admin/backups"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     // --- Session mutation role-boundary negative tests ---
@@ -118,7 +128,8 @@ class OrgScopeApiTest {
         mockMvc.perform(post("/api/v1/sessions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"id\":\"" + SESSION_ID + "\",\"courseId\":\"00000000-0000-0000-0000-000000000001\"}"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     @Test
@@ -128,7 +139,8 @@ class OrgScopeApiTest {
         mockMvc.perform(post("/api/v1/sessions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"id\":\"" + SESSION_ID + "\",\"courseId\":\"00000000-0000-0000-0000-000000000001\"}"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     @Test
@@ -138,7 +150,8 @@ class OrgScopeApiTest {
         mockMvc.perform(post("/api/v1/sessions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"id\":\"" + SESSION_ID + "\",\"courseId\":\"00000000-0000-0000-0000-000000000001\"}"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     @Test
@@ -148,7 +161,8 @@ class OrgScopeApiTest {
         mockMvc.perform(patch("/api/v1/sessions/" + SESSION_ID)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"COMPLETED\"}"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     @Test
@@ -158,7 +172,8 @@ class OrgScopeApiTest {
         mockMvc.perform(patch("/api/v1/sessions/" + SESSION_ID)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"COMPLETED\"}"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     @Test
@@ -168,7 +183,8 @@ class OrgScopeApiTest {
         mockMvc.perform(post("/api/v1/sessions/sync")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"sessions\":[],\"sets\":[]}"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     @Test
@@ -178,7 +194,8 @@ class OrgScopeApiTest {
         mockMvc.perform(post("/api/v1/sessions/sync")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"sessions\":[],\"sets\":[]}"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     @Test

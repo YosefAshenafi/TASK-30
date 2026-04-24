@@ -109,14 +109,29 @@ class AuthAuditTest {
     @Order(4)
     @WithMockUser(username = "00000000-0000-0000-0000-000000000001", roles = "ADMIN")
     void auditEndpoint_authorizedAdminReturns200() throws Exception {
+        // Q-1 remediation: promote status-only to body-shape assertion
         mockMvc.perform(get(AUDIT_URL))
-            .andExpect(status().isOk());
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content").isArray())
+            .andExpect(jsonPath("$.page").exists());
     }
 
     @Test
     @Order(5)
     void auditEndpoint_unauthenticatedReturns401() throws Exception {
+        // Q-1 remediation: pin error envelope shape for the 401 path
         mockMvc.perform(get(AUDIT_URL))
-            .andExpect(status().isUnauthorized());
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @Order(6)
+    @WithMockUser(username = "stud-uuid", roles = "STUDENT")
+    void auditEndpoint_studentRoleReturns403WithFORBIDDEN() throws Exception {
+        // Q-3 remediation: explicit 403 negative case, body-shape asserted
+        mockMvc.perform(get(AUDIT_URL))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 }

@@ -111,10 +111,26 @@ class OrgIsolationContentApiTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    @Order(7)
+    @WithMockUser(username = CORP_MENTOR_A, roles = "CORPORATE_MENTOR")
+    void corpMentorA_wrongAnswers_forbiddenForOrgBLearner() throws Exception {
+        mockMvc.perform(get("/api/v1/analytics/wrong-answers?learnerId=" + STUDENT_ORG_B))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @Order(8)
+    @WithMockUser(username = CORP_MENTOR_A, roles = "CORPORATE_MENTOR")
+    void corpMentorA_weakKnowledgePoints_forbiddenForOrgBLearner() throws Exception {
+        mockMvc.perform(get("/api/v1/analytics/weak-knowledge-points?learnerId=" + STUDENT_ORG_B))
+                .andExpect(status().isForbidden());
+    }
+
     // ---- Reports — corporate mentor report list is org-scoped ----
 
     @Test
-    @Order(7)
+    @Order(9)
     @WithMockUser(username = CORP_MENTOR_A, roles = "CORPORATE_MENTOR")
     void corpMentorA_reportList_returnsOkAndIsArray() throws Exception {
         mockMvc.perform(get("/api/v1/reports?size=50"))
@@ -123,7 +139,7 @@ class OrgIsolationContentApiTest {
     }
 
     @Test
-    @Order(8)
+    @Order(10)
     @WithMockUser(username = CORP_MENTOR_A, roles = "CORPORATE_MENTOR")
     void corpMentorA_cannotDownloadOrgBReport() throws Exception {
         // A report owned by org B's corporate mentor must be inaccessible to org A's mentor.
@@ -141,11 +157,38 @@ class OrgIsolationContentApiTest {
     // ---- Admin sees all — no org restriction ----
 
     @Test
-    @Order(9)
+    @Order(11)
     @WithMockUser(username = ADMIN_USER, roles = "ADMIN")
     void admin_sessionListNotRestrictedByOrg() throws Exception {
         mockMvc.perform(get("/api/v1/sessions?size=100"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray());
+    }
+
+    // M-1 remediation: real-JWT canonical case. Exercises JwtAuthenticationFilter
+    // + DeviceFingerprintService + RateLimitFilter on a data-scoped GET.
+    @Test
+    @Order(12)
+    void adminRealJwt_sessionListReturnsPageShape() throws Exception {
+        String adminBearer = com.meridian.support.TestAuthHelper.loginAdmin(mockMvc);
+        mockMvc.perform(get("/api/v1/sessions?size=10")
+                .header(org.springframework.http.HttpHeaders.AUTHORIZATION, adminBearer))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content").isArray())
+            .andExpect(jsonPath("$.page").value(0));
+    }
+
+    @Test
+    @Order(13)
+    void mentorRealJwt_wrongAnswersOwnScope_notForbidden() throws Exception {
+        String mentorBearer = com.meridian.support.TestAuthHelper.loginMentor(mockMvc);
+        mockMvc.perform(get("/api/v1/analytics/wrong-answers")
+                .header(org.springframework.http.HttpHeaders.AUTHORIZATION, mentorBearer))
+            .andExpect(result -> {
+                int status = result.getResponse().getStatus();
+                if (status == 401 || status == 403) {
+                    throw new AssertionError("mentor1 should pass authz for wrong-answers endpoint");
+                }
+            });
     }
 }

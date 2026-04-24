@@ -89,4 +89,17 @@ class ClassificationApiTest {
         mockMvc.perform(get("/api/v1/courses/" + CONFIDENTIAL_COURSE + "/assessment-items"))
                 .andExpect(status().isOk());
     }
+
+    // M-1 remediation: real-JWT canonical case exercises the full auth filter chain
+    // (JwtAuthenticationFilter, device-fingerprint check, rate-limit filter) on a
+    // classification-gated read — mocked-principal variants above are kept for
+    // rapid role permutation coverage only.
+    @Test
+    void student1RealJwt_canReadPublicCourseCohorts() throws Exception {
+        String studentBearer = com.meridian.support.TestAuthHelper.loginStudent1(mockMvc);
+        mockMvc.perform(get("/api/v1/courses/" + PUBLIC_COURSE + "/cohorts")
+                .header(org.springframework.http.HttpHeaders.AUTHORIZATION, studentBearer))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray());
+    }
 }

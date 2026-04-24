@@ -11,7 +11,20 @@ RUN npm config set fetch-retries 10 \
 COPY . .
 RUN npm run build
 
-FROM nginx:1.25-alpine
+# Test stage: dependencies already installed by the `build` layer above, plus
+# Chromium headless so the README "docker compose run --rm web-test" command
+# can execute unit tests with no host-side `npm ci`/`npm install` step.
+FROM node:20-alpine AS test
+WORKDIR /app
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont
+ENV CHROME_BIN=/usr/bin/chromium-browser
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+COPY --from=build /app/node_modules /app/node_modules
+COPY --from=build /app/package*.json /app/
+COPY . .
+CMD ["npx","ng","test","--watch=false","--browsers=ChromeHeadlessCI","--no-progress"]
+
+FROM nginx:1.25-alpine AS runtime
 COPY --from=build /app/dist/meridian-web /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

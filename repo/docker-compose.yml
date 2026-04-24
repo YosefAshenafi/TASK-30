@@ -50,12 +50,27 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      target: runtime
     healthcheck:
       test: ["CMD-SHELL", "wget -qO/dev/null http://localhost/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+    networks:
+      - meridian_net
+
+  # Test-only image: Node + Chromium + project deps already baked in by the
+  # `test` stage of web/Dockerfile. Opt-in via `--profile test`, so it is not
+  # built or started by `docker compose up`. Keeps README test commands free of
+  # any host-side `npm ci`/`npm install` step.
+  web-test:
+    profiles: ["test"]
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: test
+    command: ["npx","ng","test","--watch=false","--browsers=ChromeHeadlessCI","--no-progress"]
     networks:
       - meridian_net
 

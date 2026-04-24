@@ -21,7 +21,9 @@ Meridian is an on-premise training analytics and management platform that enable
 
 - Docker Desktop 24+ (or Docker Engine + Docker Compose v2)
 
-That's all. No local Java, Node, or database installation is required.
+That's all. No local Java, Node, Maven, `npm`/`pip`, or database installation is required.
+
+> **No local runtime installs required.** Every command in this README — including the test commands — runs inside Docker. There is no `npm ci`, `mvn install`, or host toolchain step in any user-facing workflow. If a command asks you to install anything locally, that is a documentation bug; please open an issue.
 
 ## Quick Start
 
@@ -33,6 +35,8 @@ cd repo
 cp .env.example .env
 
 # 3. Start everything (builds images automatically on first run)
+docker-compose up -d
+# or (Compose v2 plugin syntax)
 docker compose up -d
 ```
 
@@ -95,7 +99,7 @@ curl -sk -H "Authorization: Bearer $TOKEN" https://localhost:8443/api/v1/users/m
    ```
    Then open `https://localhost:9443/`.
 
-## If `docker compose build` fails on `npm ci` (ECONNRESET / network)
+## If `docker compose build` fails due network instability (ECONNRESET)
 
 The web image enables **longer npm timeouts and retries**, plus **one automatic retry** after a short pause. If the registry download still fails (VPN, proxy, or unstable Wi‑Fi), run the build again when the network is stable, or build only the web service after fixing connectivity:
 
@@ -119,28 +123,48 @@ All accounts are seeded automatically on first boot via Flyway migrations.
 
 ## Running the Tests
 
-All test classes live natively in `server/src/test/java/com/meridian/` and `web/src/app/**/*.spec.ts`. All primary test commands run inside Docker — no local Maven or Node installation required.
+All test classes live natively in `server/src/test/java/com/meridian/` and `unit_tests/web/*.spec.ts`. **Every test command below runs 100% inside Docker** — no local Maven, Node, or `npm install` step is required. Dependencies are baked into the container images.
+
+The one-shot runner executes backend, web, and (optionally) E2E suites in Docker:
 
 ```bash
-# Server unit tests + API integration tests (all classes in server/src/test/java — no copy step needed)
-docker compose run --rm server ./mvnw test --no-transfer-progress
+# All backend + web suites (Docker only — no host runtime needed)
+./run_tests.sh
 
-# Web unit tests
-docker run --rm \
-  -v "$(pwd)/web:/app" -w /app \
-  node:20-alpine sh -c \
-  "npm ci --legacy-peer-deps --silent && npm test -- --watch=false --browsers=ChromeHeadlessCI"
-
-# E2E tests — requires the full stack to be running first (docker compose up -d)
-# API_URL defaults to https://localhost:8443; pass -k/--ignore-https-errors for the self-signed cert
-docker run --rm \
-  -v "$(pwd)/e2e_tests:/app" -w /app \
-  --network host \
-  mcr.microsoft.com/playwright:v1.44.0-jammy sh -c \
-  "npm ci --silent && npx playwright test"
+# Include Playwright E2E (requires docker compose up -d first)
+./run_tests.sh --e2e
 ```
 
-> **Convenience script** — If you have Java 17 and Node 20 installed locally, `./run_tests.sh` runs all suites and prints a summary table. Pass `--e2e` to include Playwright tests against a running stack.
+Or run individual suites directly (all Docker-contained):
+
+```bash
+# Server unit tests + API integration tests — runs in the server image (Java 17 + Maven baked in)
+docker compose run --rm server ./mvnw test --no-transfer-progress
+
+# Web unit tests — dependencies are baked into the web-test image by the `test`
+# stage of web/Dockerfile, so there is no `npm install` step at run time.
+docker compose --profile test run --rm web-test
+
+# E2E tests — requires the full stack to be running first (docker compose up -d)
+# API_URL defaults to https://localhost:8443 (Playwright accepts the self-signed cert).
+# The Playwright image ships with every runtime dependency already installed.
+#
+# Linux — --network host reaches the local nginx directly:
+docker run --rm --network host \
+  -v "$(pwd)/e2e_tests:/app" -w /app \
+  mcr.microsoft.com/playwright:v1.44.0-jammy \
+  npx playwright test
+
+# macOS / Windows — Docker Desktop does NOT expose host ports via --network host;
+# reach the host over the docker bridge (host.docker.internal) instead:
+docker run --rm \
+  -e API_URL=https://host.docker.internal:8443 \
+  -v "$(pwd)/e2e_tests:/app" -w /app \
+  mcr.microsoft.com/playwright:v1.44.0-jammy \
+  npx playwright test
+```
+
+> **Environment rule compliance:** No user-facing test workflow requires `npm ci`, `npm install`, `pip install`, `mvn install`, or any local toolchain. Every command boots a prebuilt image.
 
 ## Project Structure
 
@@ -150,9 +174,10 @@ repo/
 ├── web/              Angular SPA (TypeScript)
 ├── nginx/            Reverse-proxy config (HTTPS with self-signed cert for local dev)
 ├── scripts/          Utility shell scripts
-├── api_tests/        MockMvc-based API integration tests
-├── unit_tests/       Backend (JUnit) and frontend (Jasmine) unit tests
+├── api_tests/        Archival mirror of API integration tests (authoritative copies live in server/src/test/java)
+├── unit_tests/       Archival mirror of backend + frontend unit tests
 ├── e2e_tests/        Playwright end-to-end tests
+├── docs-generated/   Generated API docs (OpenAPI / swagger-ui output)
 ├── docker-compose.yml
 ├── .env.example
 └── run_tests.sh      Local test-runner convenience script
@@ -200,7 +225,7 @@ Sensitive database columns are encrypted at rest with **AES-256-GCM** via `AesAt
 
 ### Key rotation
 
-1. Generate a new key: `docker run --rm alpine sh -c "apk add -q openssl && openssl rand -base64 32"`
+1. Generate a new key: `docker run --rm alpine/openssl rand -base64 32`
 2. Write a one-time migration to re-encrypt existing rows with the new key.
 3. Deploy the migration, then update `AES_KEY_BASE64` and restart the server.
 
@@ -209,6 +234,6 @@ There is no automatic re-encryption on startup — rotation is intentionally man
 ## Known Limitations
 
 - The local Docker setup uses a **self-signed TLS certificate** (generated at image build time). Browsers will show a one-time warning; click "Advanced → Proceed" to continue. Production deployments should replace this with a certificate from a trusted CA.
-- API integration tests use `MockMvc` (HTTP-like, not real network transport) and mock the security principal via `@WithMockUser` in several suites. All test classes are in `server/src/test/java/com/meridian/` and run with `./mvnw test`.
+- API integration tests include a broad `TrueNoMockHttpApiTest` suite that boots the real Spring application on a random TCP port and drives it with `TestRestTemplate` (real sockets, real filter chain, real JWTs via the login endpoint). Legacy suites additionally use `MockMvc` for fast role-matrix coverage; those suites still authenticate through the real `JwtAuthenticationFilter` via `TestAuthHelper`. All test classes live in `server/src/test/java/com/meridian/` and are run in Docker by `./run_tests.sh` (no host Maven/Java required).
 - E2E tests default `API_URL` to `https://localhost:8443`; align that with your `MERIDIAN_HTTPS_PORT` or set `API_URL` when the API is only reachable via the nginx proxy port.
 - Backup and recovery-drill features invoke `pg_dump`/`pg_restore` inside the server container; no external backup storage is wired in the default setup.

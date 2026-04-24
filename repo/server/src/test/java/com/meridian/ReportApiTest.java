@@ -36,6 +36,7 @@ class ReportApiTest {
     private static final String OTHER_USER = "00000000-0000-0000-0000-000000000003";
 
     private static String createdRunId;
+    private static String createdScheduleId;
 
     @Test
     @Order(1)
@@ -253,6 +254,7 @@ class ReportApiTest {
             .andReturn();
         String schedJson = createResult.getResponse().getContentAsString();
         String schedId = schedJson.replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+        createdScheduleId = schedId;
 
         // Toggle enabled=false
         mockMvc.perform(put(REPORTS_URL + "/schedules/" + schedId)
@@ -260,5 +262,49 @@ class ReportApiTest {
                 .content("{\"enabled\":false,\"cronExpr\":\"0 0 3 * * *\"}"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.enabled").value(false));
+    }
+
+    @Test
+    @Order(14)
+    @WithMockUser(username = OWNER_USER, roles = "FACULTY_MENTOR")
+    void listSchedules_returnsPageShape() throws Exception {
+        mockMvc.perform(get(REPORTS_URL + "/schedules"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content").isArray())
+            .andExpect(jsonPath("$.page").exists());
+    }
+
+    @Test
+    @Order(15)
+    @WithMockUser(username = OWNER_USER, roles = "FACULTY_MENTOR")
+    void deleteSchedule_owner_returns204() throws Exception {
+        Assumptions.assumeTrue(createdScheduleId != null);
+        mockMvc.perform(delete(REPORTS_URL + "/schedules/" + createdScheduleId))
+            .andExpect(status().isNoContent());
+    }
+
+    // M-1 remediation: canonical real-JWT positive case for ReportController.
+    // Exercises the full auth filter chain on a listing endpoint — remaining
+    // tests above use @WithMockUser for role-permutation density.
+    @Test
+    @Order(16)
+    void adminRealJwt_listReports_returnsPageShape() throws Exception {
+        String adminBearer = com.meridian.support.TestAuthHelper.loginAdmin(mockMvc);
+        mockMvc.perform(get(REPORTS_URL + "?size=10")
+                .header(org.springframework.http.HttpHeaders.AUTHORIZATION, adminBearer))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content").isArray())
+            .andExpect(jsonPath("$.page").exists());
+    }
+
+    @Test
+    @Order(17)
+    void facultyRealJwt_listSchedules_returnsPageShape() throws Exception {
+        String facultyBearer = com.meridian.support.TestAuthHelper.loginFaculty(mockMvc);
+        mockMvc.perform(get(REPORTS_URL + "/schedules?page=0&size=10")
+                .header(org.springframework.http.HttpHeaders.AUTHORIZATION, facultyBearer))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content").isArray())
+            .andExpect(jsonPath("$.page").exists());
     }
 }
