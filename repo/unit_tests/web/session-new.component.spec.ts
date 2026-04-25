@@ -59,10 +59,15 @@ describe('SessionNewComponent', () => {
   it('responds to user interaction: form becomes valid with required fields filled', () => {
     fixture.detectChanges();
     const httpMock = TestBed.inject(HttpTestingController);
-    httpMock.expectOne(r => r.url.startsWith('/api/v1/courses')).flush({ content: [] });
+    // Initial GET /api/v1/courses?size=100 from ngOnInit
+    httpMock.expectOne(r => r.method === 'GET' && r.url === '/api/v1/courses?size=100')
+      .flush({ content: [] });
 
     component.form.patchValue({ courseId: 'c-1', restSecondsDefault: 60 });
     expect(component.form.get('courseId')?.valid).toBeTrue();
+
+    // Selecting a courseId triggers a cohorts lookup; flush it so verify() stays clean.
+    httpMock.expectOne('/api/v1/courses/c-1/cohorts').flush([]);
   });
 
   it('handles offline state: shows offline banner', () => {

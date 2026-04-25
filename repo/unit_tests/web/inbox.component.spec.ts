@@ -7,6 +7,7 @@ import { InboxComponent } from '../../web/src/app/notifications/pages/inbox.comp
 describe('InboxComponent', () => {
   let fixture: ComponentFixture<InboxComponent>;
   let component: InboxComponent;
+  let httpMock: HttpTestingController;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -20,12 +21,15 @@ describe('InboxComponent', () => {
 
     fixture = TestBed.createComponent(InboxComponent);
     component = fixture.componentInstance;
+    httpMock = TestBed.inject(HttpTestingController);
   });
 
   it('renders initial state with Notifications heading and tabs', () => {
-    component.loading = false;
-    component.notifications = [];
-    fixture.detectChanges();
+    fixture.detectChanges(); // ngOnInit -> load() fires GET /api/v1/notifications?size=50
+    httpMock.match(r => r.url.startsWith('/api/v1/notifications'))
+      .forEach(r => r.flush({ content: [] }));
+    fixture.detectChanges(); // re-render with loading=false, notifications=[]
+
     const el: HTMLElement = fixture.nativeElement;
     expect(el.textContent).toContain('Notifications');
     expect(el.textContent).toContain('No unread notifications');
@@ -56,7 +60,7 @@ describe('InboxComponent', () => {
 
   afterEach(() => {
     component.ngOnDestroy();
-    const httpMock = TestBed.inject(HttpTestingController);
     httpMock.match(() => true).forEach(r => r.flush({ content: [] }));
+    httpMock.verify();
   });
 });

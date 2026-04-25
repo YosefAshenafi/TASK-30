@@ -26,6 +26,7 @@ describe('SessionsListComponent', () => {
   let fixture: ComponentFixture<SessionsListComponent>;
   let component: SessionsListComponent;
   let network: FakeNetwork;
+  let httpMock: HttpTestingController;
 
   beforeEach(async () => {
     network = new FakeNetwork();
@@ -43,12 +44,15 @@ describe('SessionsListComponent', () => {
 
     fixture = TestBed.createComponent(SessionsListComponent);
     component = fixture.componentInstance;
+    httpMock = TestBed.inject(HttpTestingController);
   });
 
   it('renders initial state with title and empty list', () => {
-    component.loading = false;
-    component.sessions = [];
     fixture.detectChanges();
+    httpMock.expectOne(r => r.method === 'GET' && r.url.startsWith('/api/v1/sessions'))
+      .flush({ content: [] });
+    fixture.detectChanges();
+
     const el: HTMLElement = fixture.nativeElement;
     expect(el.textContent).toContain('Training Sessions');
     expect(el.textContent).toContain('No sessions yet');
@@ -64,12 +68,16 @@ describe('SessionsListComponent', () => {
   });
 
   it('handles offline state: shows offline banner', () => {
+    // Going offline before detectChanges takes the loadFromCache branch in ngOnInit,
+    // so no HTTP call is made — keeps verify() clean.
     network.online$.next(false);
+    fixture.detectChanges();
     component.loading = false;
     fixture.detectChanges();
+
     const el: HTMLElement = fixture.nativeElement;
     expect(el.textContent).toContain('Offline');
   });
 
-  afterEach(() => TestBed.inject(HttpTestingController).verify());
+  afterEach(() => httpMock.verify());
 });
