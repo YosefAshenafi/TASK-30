@@ -20,8 +20,8 @@ public class AllowedIpRange {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ColumnTransformer(write = "CAST(? AS cidr)")
-    @Column(nullable = false, columnDefinition = "cidr")
+    @ColumnTransformer(write = "CAST(? AS inet)")
+    @Column(nullable = false, columnDefinition = "inet")
     private String cidr;
 
     @Column(name = "role_scope", length = 20)

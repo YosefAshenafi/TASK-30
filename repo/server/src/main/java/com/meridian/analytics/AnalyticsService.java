@@ -20,7 +20,7 @@ public class AnalyticsService {
         String sql = """
                 SELECT DATE_TRUNC('day', aa.attempted_at) AS day,
                        COUNT(*) AS attempts,
-                       SUM(CASE WHEN aa.is_correct THEN 1 ELSE 0 END)::numeric / COUNT(*) AS mastery
+                       CAST(SUM(CASE WHEN aa.is_correct THEN 1 ELSE 0 END) AS numeric) / COUNT(*) AS mastery
                 FROM assessment_attempts aa
                 JOIN assessment_items ai ON ai.id = aa.item_id
                 WHERE aa.attempted_at IS NOT NULL
@@ -56,9 +56,9 @@ public class AnalyticsService {
         String sql = """
                 SELECT aa.item_id,
                        LEFT(ai.stem, 80) AS stem_preview,
-                       aa.chosen_answer::text AS choice,
+                       CAST(aa.chosen_answer AS text) AS choice,
                        COUNT(*) AS cnt,
-                       COUNT(*)::numeric / SUM(COUNT(*)) OVER (PARTITION BY aa.item_id) AS pct
+                       CAST(COUNT(*) AS numeric) / SUM(COUNT(*)) OVER (PARTITION BY aa.item_id) AS pct
                 FROM assessment_attempts aa
                 JOIN assessment_items ai ON ai.id = aa.item_id
                 WHERE aa.is_correct = false
@@ -78,10 +78,10 @@ public class AnalyticsService {
                                  WHERE enr2.student_id = aa.student_id AND coi.instructor_id = CAST(:instructorId AS uuid)))
                   AND (:courseVersion IS NULL
                        OR EXISTS(SELECT 1 FROM courses cv WHERE cv.id = ai.course_id AND cv.version = :courseVersion))
-                GROUP BY aa.item_id, ai.stem, aa.chosen_answer::text
+                GROUP BY aa.item_id, ai.stem, CAST(aa.chosen_answer AS text)
                 ORDER BY cnt DESC
                 LIMIT 200
-                """;
+""";
 
         List<WrongAnswerDistribution.Item> items = jdbc.query(sql, buildParams(f), (rs, i) -> new WrongAnswerDistribution.Item(
                 UUID.fromString(rs.getString("item_id")),

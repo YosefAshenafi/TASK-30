@@ -18,7 +18,7 @@ public interface AllowedIpRangeRepository extends JpaRepository<AllowedIpRange, 
            nativeQuery = true)
     boolean isIpAllowed(@Param("ip") String ip, @Param("roleScope") String roleScope);
 
-    @Query(value = "SELECT cidr::text FROM allowed_ip_ranges WHERE (role_scope IS NULL OR role_scope = :roleScope) ORDER BY created_at",
+    @Query(value = "SELECT CAST(cidr AS text) FROM allowed_ip_ranges WHERE (role_scope IS NULL OR role_scope = :roleScope) ORDER BY created_at",
            nativeQuery = true)
     List<String> findCidrsByRole(@Param("roleScope") String roleScope);
 }
