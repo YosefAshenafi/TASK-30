@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.IOException;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,6 +22,9 @@ class RecoveryDrillRunnerTest {
 
     @Mock
     private RecoveryDrillRepository recoveryDrillRepository;
+
+    @Mock
+    private ProcessExecutor processExecutor;
 
     @InjectMocks
     private RecoveryDrillRunner drillRunner;
@@ -55,18 +59,22 @@ class RecoveryDrillRunnerTest {
     }
 
     @Test
-    void execute_drillDbNotCreated_setsDrillFailed() {
-        // pg_restore/psql are not in path in unit test env — execute will fail
+    void execute_drillDbNotCreated_setsDrillFailed() throws Exception {
+        // psql returns non-zero for the CREATE DATABASE step
+        when(processExecutor.run(any())).thenReturn(new ProcessExecutor.ProcessResult(1, ""));
         backupRun.setFilePath("/tmp/nonexistent.dump");
 
         drillRunner.execute(drill, backupRun);
 
-        assertThat(drill.getStatus()).isIn("FAILED", "PASSED");
+        assertThat(drill.getStatus()).isEqualTo("FAILED");
+        assertThat(drill.getNotes()).contains("Failed to create drill database");
         assertThat(drill.getCompletedAt()).isNotNull();
     }
 
     @Test
-    void execute_initialStatusSetToRunning() {
+    void execute_initialStatusSetToRunning() throws Exception {
+        // Fail on CREATE DATABASE so the test terminates quickly
+        when(processExecutor.run(any())).thenReturn(new ProcessExecutor.ProcessResult(1, ""));
         backupRun.setFilePath("/tmp/test.dump");
 
         drillRunner.execute(drill, backupRun);
@@ -76,15 +84,30 @@ class RecoveryDrillRunnerTest {
     }
 
     @Test
-    void execute_failureDoesNotLeaveOrphanedDb() {
-        // Verify the execute path completes without throwing — cleanup is called regardless.
-        // If psql is absent, we get an IOException → dropDrillDbQuietly path.
+    void execute_failureDoesNotLeaveOrphanedDb() throws Exception {
+        // IOException on CREATE DATABASE triggers the quiet-drop cleanup path
+        when(processExecutor.run(any())).thenThrow(new IOException("psql: No such file or directory"));
         backupRun.setFilePath("/tmp/meridian-test.dump");
 
-        // Must not throw even when psql/pg_restore are unavailable
         drillRunner.execute(drill, backupRun);
 
-        // Status is always set — no silent hang
-        assertThat(drill.getStatus()).isNotNull();
+        // Status is always set — no silent hang or unhandled exception
+        assertThat(drill.getStatus()).isEqualTo("FAILED");
+        assertThat(drill.getCompletedAt()).isNotNull();
+    }
+
+    @Test
+    void execute_restoreFailure_setsDrillFailed() throws Exception {
+        // CREATE DATABASE succeeds, pg_restore fails
+        when(processExecutor.run(any()))
+                .thenReturn(new ProcessExecutor.ProcessResult(0, ""))  // CREATE DATABASE
+                .thenReturn(new ProcessExecutor.ProcessResult(1, ""))  // pg_restore
+                .thenReturn(new ProcessExecutor.ProcessResult(0, "")); // DROP DATABASE cleanup
+        backupRun.setFilePath("/tmp/test.dump");
+
+        drillRunner.execute(drill, backupRun);
+
+        assertThat(drill.getStatus()).isEqualTo("FAILED");
+        assertThat(drill.getNotes()).contains("pg_restore exited with code 1");
     }
 }

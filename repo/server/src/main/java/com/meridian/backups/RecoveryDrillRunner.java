@@ -18,6 +18,7 @@ import java.time.Instant;
 public class RecoveryDrillRunner {
 
     private final RecoveryDrillRepository recoveryDrillRepository;
+    private final ProcessExecutor processExecutor;
 
     @Value("${app.backup-path:/app/backups}")
     private String backupPath;
@@ -49,7 +50,7 @@ public class RecoveryDrillRunner {
                     "psql", "-h", dbHost, "-p", dbPort, "-U", dbUser, "-c",
                     "CREATE DATABASE " + drillDb + ";");
             createDb.environment().put("PGPASSWORD", pgPassword);
-            int createCode = createDb.start().waitFor();
+            int createCode = processExecutor.run(createDb).exitCode();
             if (createCode != 0) {
                 fail(drill, "Failed to create drill database (exit " + createCode + ")");
                 return;
@@ -60,7 +61,7 @@ public class RecoveryDrillRunner {
                     "pg_restore", "-h", dbHost, "-p", dbPort, "-U", dbUser,
                     "-d", drillDb, "--no-owner", "--no-acl", filePath);
             restore.environment().put("PGPASSWORD", pgPassword);
-            int restoreCode = restore.start().waitFor();
+            int restoreCode = processExecutor.run(restore).exitCode();
             if (restoreCode != 0) {
                 dropDrillDb(drillDb, dbHost, dbPort, dbUser, pgPassword);
                 fail(drill, "pg_restore exited with code " + restoreCode);
@@ -92,9 +93,7 @@ public class RecoveryDrillRunner {
                 "psql", "-h", host, "-p", port, "-U", user, "-d", db,
                 "-t", "-c", "SELECT COUNT(*) FROM users;");
         pb.environment().put("PGPASSWORD", password);
-        Process p = pb.start();
-        p.waitFor();
-        String out = new String(p.getInputStream().readAllBytes()).trim();
+        String out = processExecutor.run(pb).stdout();
         try {
             return Long.parseLong(out);
         } catch (NumberFormatException ex) {
@@ -108,7 +107,7 @@ public class RecoveryDrillRunner {
                     "psql", "-h", host, "-p", port, "-U", user, "-c",
                     "DROP DATABASE IF EXISTS " + db + ";");
             pb.environment().put("PGPASSWORD", password);
-            pb.start().waitFor();
+            processExecutor.run(pb);
         } catch (Exception e) {
             log.warn("Could not drop drill database {}", db, e);
         }
@@ -124,7 +123,7 @@ public class RecoveryDrillRunner {
             ProcessBuilder pb = new ProcessBuilder("psql", "-h", host, "-p", port, "-U", user, "-c",
                     "DROP DATABASE IF EXISTS " + db + ";");
             pb.environment().put("PGPASSWORD", pgPassword);
-            pb.start().waitFor();
+            processExecutor.run(pb);
         } catch (Exception ignored) {}
     }
 

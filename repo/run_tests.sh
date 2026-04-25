@@ -19,7 +19,10 @@ MAVEN_TEST_FLAGS=""
 
 # Docker image used to run backend Maven suites so the script does not depend
 # on a host JDK/Maven. Matches the server Dockerfile's baseline JDK.
-SERVER_TEST_IMAGE="${SERVER_TEST_IMAGE:-maven:3.9-eclipse-temurin-17}"
+# Defaults to a locally-built image that includes postgresql-client so pg_dump /
+# psql / pg_restore are available when integration tests invoke those binaries.
+# Override via SERVER_TEST_IMAGE env var (e.g. in CI after pre-building).
+SERVER_TEST_IMAGE="${SERVER_TEST_IMAGE:-}"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -231,6 +234,27 @@ if _detect_docker; then
 else
   DOCKER_AVAILABLE=false
 fi
+
+# Build the Maven test image (which includes postgresql-client) if not already
+# cached and no override was supplied. This ensures pg_dump / psql / pg_restore
+# are present for any integration test path that spawns those processes.
+_MAVEN_TEST_IMG_TAG="meridian-maven-test:local"
+if $DOCKER_AVAILABLE && [[ -z "${SERVER_TEST_IMAGE}" ]]; then
+  if docker image inspect "$_MAVEN_TEST_IMG_TAG" >/dev/null 2>&1; then
+    SERVER_TEST_IMAGE="$_MAVEN_TEST_IMG_TAG"
+  else
+    echo "  Building Maven test image (includes postgresql-client)..."
+    if docker build -q -f "$REPO/server/Dockerfile.test" \
+        -t "$_MAVEN_TEST_IMG_TAG" "$REPO/server" 2>/dev/null; then
+      SERVER_TEST_IMAGE="$_MAVEN_TEST_IMG_TAG"
+    else
+      SERVER_TEST_IMAGE="maven:3.9-eclipse-temurin-17"
+      echo "  Warning: test image build failed — falling back to base Maven image"
+      echo "           pg_dump/psql will be unavailable in the test container"
+    fi
+  fi
+fi
+SERVER_TEST_IMAGE="${SERVER_TEST_IMAGE:-maven:3.9-eclipse-temurin-17}"
 
 JAVA_MAJOR=$(_detect_java_major)
 MAVEN_JAVA_MAJOR=$(_detect_maven_java_major)
@@ -471,7 +495,7 @@ run_web_unit_tests() {
   local tmpout; tmpout=$(mktemp)
   local result=0
   (cd "$REPO" && docker compose --profile test run --rm \
-    -v "$web:/app" -w /app \
+    -v "$web/src:/app/src" -w /app \
     web-test \
     npx ng test --watch=false --browsers=ChromeHeadlessCI --no-progress) \
     2>&1 | tee "$tmpout" || result=$?

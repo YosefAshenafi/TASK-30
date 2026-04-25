@@ -24,6 +24,7 @@ public class BackupRunner {
 
     private final BackupRunRepository backupRunRepository;
     private final BackupPolicyRepository backupPolicyRepository;
+    private final ProcessExecutor processExecutor;
 
     @Value("${app.backup-path:/app/backups}")
     private String defaultBackupPath;
@@ -63,8 +64,7 @@ public class BackupRunner {
                     datasourcePassword != null && !datasourcePassword.isEmpty()
                             ? datasourcePassword
                             : System.getenv().getOrDefault("DB_PASSWORD", ""));
-            Process process = pb.start();
-            int exitCode = process.waitFor();
+            int exitCode = processExecutor.run(pb).exitCode();
 
             if (exitCode == 0) {
                 Path dumpFile = Path.of(filePath);

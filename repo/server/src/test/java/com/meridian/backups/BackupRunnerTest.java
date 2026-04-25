@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.UUID;
 
@@ -25,6 +26,9 @@ class BackupRunnerTest {
 
     @Mock
     private BackupPolicyRepository backupPolicyRepository;
+
+    @Mock
+    private ProcessExecutor processExecutor;
 
     @InjectMocks
     private BackupRunner backupRunner;
@@ -83,33 +87,54 @@ class BackupRunnerTest {
         assertThat(t.database()).isEqualTo("meridian");
     }
 
-    // ---- execute() status transitions — pg_dump is mocked via ProcessBuilder spy ----
+    // ---- execute() status transitions — pg_dump is fully mocked ----
 
     @Test
-    void execute_pgDumpFailure_setsStatusFailed() {
+    void execute_pgDumpFailure_setsStatusFailed() throws Exception {
+        when(processExecutor.run(any())).thenReturn(new ProcessExecutor.ProcessResult(1, "pg_dump: connection refused"));
+        when(backupRunRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
         BackupRun run = new BackupRun();
         run.setId(UUID.randomUUID());
         run.setType("FULL");
-        lenient().when(backupRunRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         backupRunner.execute(run);
 
-        assertThat(run.getStatus()).isIn("FAILED", "COMPLETED");
+        assertThat(run.getStatus()).isEqualTo("FAILED");
+        assertThat(run.getErrorMessage()).contains("pg_dump exited with code 1");
+        assertThat(run.getCompletedAt()).isNotNull();
         verify(backupRunRepository, atLeastOnce()).save(run);
     }
 
     @Test
-    void execute_ioException_setsStatusFailed() {
-        ReflectionTestUtils.setField(backupRunner, "datasourceUrl",
-                "jdbc:postgresql://localhost:5432/meridian");
+    void execute_pgDumpSuccess_setsStatusCompleted() throws Exception {
+        when(processExecutor.run(any())).thenReturn(new ProcessExecutor.ProcessResult(0, ""));
+        when(backupRunRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
         BackupRun run = new BackupRun();
         run.setId(UUID.randomUUID());
-        run.setType("INCREMENTAL");
-        lenient().when(backupRunRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        run.setType("FULL");
 
         backupRunner.execute(run);
 
-        assertThat(run.getStatus()).isNotNull();
+        assertThat(run.getStatus()).isEqualTo("COMPLETED");
+        assertThat(run.getCompletedAt()).isNotNull();
+        verify(backupRunRepository, atLeastOnce()).save(run);
+    }
+
+    @Test
+    void execute_ioException_setsStatusFailed() throws Exception {
+        when(processExecutor.run(any())).thenThrow(new IOException("pg_dump: No such file or directory"));
+        when(backupRunRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        BackupRun run = new BackupRun();
+        run.setId(UUID.randomUUID());
+        run.setType("INCREMENTAL");
+
+        backupRunner.execute(run);
+
+        assertThat(run.getStatus()).isEqualTo("FAILED");
+        assertThat(run.getErrorMessage()).contains("pg_dump: No such file or directory");
         assertThat(run.getCompletedAt()).isNotNull();
     }
 }

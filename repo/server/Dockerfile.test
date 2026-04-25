@@ -1,0 +1,8 @@
+# Maven test runner image — extends the base Maven image with postgresql-client
+# so that pg_dump / psql / pg_restore are available during integration test execution.
+# Build once: docker build -f server/Dockerfile.test -t meridian-maven-test:local server/
+# run_tests.sh builds and caches this automatically when SERVER_TEST_IMAGE is unset.
+FROM maven:3.9-eclipse-temurin-17
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
