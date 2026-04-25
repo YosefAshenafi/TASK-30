@@ -1,5 +1,5 @@
 -- Seed fixtures for E2E tests covering org-scope isolation and the recycle
--- bin round-trip. Kept in a separate forward migration (V202) so existing
+-- bin round-trip. Kept in a separate forward migration (V204) so existing
 -- environments that already ran V200 pick up the new data without breaking
 -- Flyway's migration-history checksum for V200.
 

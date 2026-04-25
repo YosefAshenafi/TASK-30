@@ -1,5 +1,5 @@
 -- Missing test fixtures required by integration test suites.
--- V203 extends the local seed data without modifying existing V200/V202
+-- V203 extends the local seed data without modifying existing V200/V204
 -- migrations (which would break Flyway checksums on environments that
 -- already applied those versions).
 
