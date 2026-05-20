@@ -1,4 +1,0 @@
-#!/bin/sh
-# Maven Wrapper — delegates to mvn if available in PATH (Docker dev container).
-# For local development without Docker, install Maven: https://maven.apache.org/install.html
-exec mvn "$@"
