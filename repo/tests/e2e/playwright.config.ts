@@ -1,0 +1,17 @@
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig({
+  testDir: '.',
+  timeout: 30000,
+  retries: 1,
+  use: {
+    baseURL: process.env['BASE_URL'] || 'http://localhost:4200',
+    headless: true,
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+  },
+  reporter: [
+    ['list'],
+    ['json', { outputFile: 'results.json' }],
+  ],
+});

@@ -1,0 +1,11 @@
+com/meridian/api/AuthControllerTest.class
+com/meridian/api/ReportControllerTest.class
+com/meridian/api/TestContainersBase.class
+com/meridian/api/GovernanceControllerTest.class
+com/meridian/api/AdminUserControllerTest.class
+com/meridian/api/SessionControllerTest.class
+com/meridian/api/SessionSyncControllerTest.class
+com/meridian/api/RecycleBinControllerTest.class
+com/meridian/api/AnalyticsControllerTest.class
+com/meridian/api/BackupControllerTest.class
+com/meridian/api/CourseControllerTest.class

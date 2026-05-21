@@ -5,5 +5,5 @@
   "backend_language": "Java",
   "frontend_framework": "Angular",
   "backend_framework": "Spring Boot",
-  "database": "PostgreSQL (primary, system-of-record); IndexedDB (secondary, client-side offline cache)"
+  "database": "PostgreSQL (primary, system-of-record; stores users, roles, courses, assessment items, attempts, session logs, operational transactions, audit events); IndexedDB (secondary, client-side offline cache for session logs and draft assessments)"
 }
