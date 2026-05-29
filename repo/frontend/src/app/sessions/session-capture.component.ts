@@ -5,7 +5,7 @@ import {
   ChangeDetectorRef,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, FormGroup, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
+import { ReactiveFormsModule, FormsModule, FormBuilder, FormGroup, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -14,6 +14,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 import { MatDividerModule } from '@angular/material/divider';
 import { Subscription, Observable } from 'rxjs';
 import { ApiService } from '../core/api.service';
@@ -22,9 +23,15 @@ import { SyncService } from '../core/sync.service';
 import { v4 as uuidv4 } from 'uuid';
 
 interface Activity {
+  activityId?: string;
   activityRef: string;
   name: string;
   completed: boolean;
+}
+
+interface CourseOption {
+  id: string;
+  title: string;
 }
 
 interface SessionDetail {
@@ -61,12 +68,42 @@ function restTimerRangeValidator(control: AbstractControl): ValidationErrors | n
     MatCheckboxModule,
     MatFormFieldModule,
     MatInputModule,
+    MatSelectModule,
     MatDividerModule,
+    FormsModule,
   ],
   template: `
     <div class="session-capture-container">
       <div *ngIf="loading" class="loading-center">
         <mat-spinner diameter="48"></mat-spinner>
+      </div>
+
+      <!-- Course selection (shown when starting a new session with >1 course) -->
+      <mat-card class="course-picker-card" *ngIf="!loading && selectingCourse && !session">
+        <mat-card-header>
+          <mat-card-title>Start a Training Session</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <mat-form-field appearance="outline" class="course-select">
+            <mat-label>Select a course</mat-label>
+            <mat-select [(ngModel)]="selectedCourseId">
+              <mat-option *ngFor="let c of courses" [value]="c.id">{{ c.title }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <button
+            mat-raised-button
+            color="primary"
+            [disabled]="!selectedCourseId"
+            (click)="startSelectedCourse()"
+          >
+            <mat-icon>play_arrow</mat-icon>
+            Start Session
+          </button>
+        </mat-card-content>
+      </mat-card>
+
+      <div class="error-banner" *ngIf="!loading && !session && errorMessage" role="alert">
+        {{ errorMessage }}
       </div>
 
       <ng-container *ngIf="!loading && session">
@@ -317,6 +354,11 @@ export class SessionCaptureComponent implements OnInit, OnDestroy {
   errorMessage = '';
   isOffline = false;
 
+  // New-session course selection
+  selectingCourse = false;
+  courses: CourseOption[] = [];
+  selectedCourseId: string | null = null;
+
   elapsed = 0;
   restCountdown: number | null = null;
   restTimerRunning = false;
@@ -354,7 +396,7 @@ export class SessionCaptureComponent implements OnInit, OnDestroy {
     if (this.sessionId) {
       this.loadExistingSession(this.sessionId);
     } else {
-      this.createNewSession();
+      this.startNewSession();
     }
   }
 
@@ -380,7 +422,10 @@ export class SessionCaptureComponent implements OnInit, OnDestroy {
     } else {
       this.apiService
         .put<SessionDetail>(`/sessions/${this.session.id}`, {
-          activities: this.session.activities,
+          activities: this.session.activities.map((a) => ({
+            activityId: a.activityId,
+            completed: a.completed,
+          })),
         })
         .subscribe({
           error: () => {
@@ -437,11 +482,19 @@ export class SessionCaptureComponent implements OnInit, OnDestroy {
   private loadExistingSession(id: string): void {
     this.loading = true;
 
-    this.apiService.get<SessionDetail>(`/sessions/${id}`).subscribe({
+    this.apiService.get<any>(`/sessions/${id}`).subscribe({
       next: (data) => {
-        this.session = data;
+        this.session = this.mapResponseToSession(data, '');
         this.loading = false;
         this.restTimerForm.patchValue({ restTimerSecs: data.restTimerSecs });
+        // Resolve a human-readable course title for the header.
+        this.apiService.get<{ title: string }>(`/courses/${data.courseId}`).subscribe({
+          next: (c) => {
+            if (this.session) this.session.courseName = c?.title ?? '';
+            this.cdr.markForCheck();
+          },
+          error: () => {},
+        });
         this.startElapsedTimer();
         this.cdr.markForCheck();
       },
@@ -458,24 +511,62 @@ export class SessionCaptureComponent implements OnInit, OnDestroy {
     });
   }
 
-  private createNewSession(): void {
+  // Step 1 of starting a session: load the courses the student can train on so a
+  // course can be chosen. A session must be tied to a course (the backend requires
+  // courseId), and the activity checklist is derived from that course's items.
+  private startNewSession(): void {
     this.loading = true;
-    const idempotencyKey = uuidv4();
-
     this.apiService
-      .post<SessionDetail>('/sessions', { idempotencyKey })
+      .get<{ content: CourseOption[] }>('/courses')
+      .subscribe({
+        next: (page) => {
+          this.courses = (page?.content ?? []).map((c) => ({ id: c.id, title: c.title }));
+          this.loading = false;
+          if (this.courses.length === 1) {
+            // Only one course available — start immediately for a smooth flow.
+            this.createSessionForCourse(this.courses[0].id, this.courses[0].title);
+          } else if (this.courses.length > 1) {
+            this.selectingCourse = true;
+          } else {
+            this.errorMessage = 'No courses are available to start a session.';
+          }
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.loading = false;
+          this.errorMessage = 'Failed to load courses. Please try again.';
+          this.cdr.markForCheck();
+        },
+      });
+  }
+
+  // Invoked by the course-picker "Start Session" button.
+  startSelectedCourse(): void {
+    if (!this.selectedCourseId) return;
+    const course = this.courses.find((c) => c.id === this.selectedCourseId);
+    this.selectingCourse = false;
+    this.createSessionForCourse(this.selectedCourseId, course?.title ?? '');
+  }
+
+  // Step 2: create the session on the server for the chosen course.
+  private createSessionForCourse(courseId: string, courseName: string): void {
+    this.loading = true;
+    this.apiService
+      .post<SessionDetail>('/sessions', { courseId })
       .subscribe({
         next: (data) => {
-          this.session = data;
+          this.session = this.mapResponseToSession(data, courseName);
           this.loading = false;
           this.startElapsedTimer();
           this.router.navigate(['/sessions', data.id], { replaceUrl: true });
           this.cdr.markForCheck();
         },
         error: () => {
+          // Offline / server-unreachable fallback: keep a local draft to sync later.
+          const idempotencyKey = uuidv4();
           const newLocalSession: LocalSession = {
             idempotencyKey,
-            courseId: '',
+            courseId,
             status: 'IN_PROGRESS',
             restTimerSecs: 60,
             startedAt: new Date().toISOString(),
@@ -485,11 +576,33 @@ export class SessionCaptureComponent implements OnInit, OnDestroy {
           };
           this.dbService.db.sessions.put(newLocalSession);
           this.session = this.mapLocalToDetail(newLocalSession);
+          this.session.courseName = courseName || 'Offline Session';
           this.loading = false;
           this.startElapsedTimer();
           this.cdr.markForCheck();
         },
       });
+  }
+
+  // Maps a server SessionResponse (which carries activities as {activityId,name,completed})
+  // into the component's SessionDetail shape used by the template.
+  private mapResponseToSession(data: any, courseName: string): SessionDetail {
+    return {
+      id: data.id,
+      courseId: data.courseId,
+      courseName: courseName || data.courseName || '',
+      status: data.status,
+      restTimerSecs: data.restTimerSecs,
+      startedAt: data.startedAt,
+      completedAt: data.completedAt,
+      idempotencyKey: data.idempotencyKey ?? '',
+      activities: (data.activities ?? []).map((a: any) => ({
+        activityId: a.activityId,
+        activityRef: a.name,
+        name: a.name,
+        completed: a.completed,
+      })),
+    };
   }
 
   private saveToIndexedDB(): void {

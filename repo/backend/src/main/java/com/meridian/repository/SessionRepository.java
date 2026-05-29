@@ -19,4 +19,10 @@ public interface SessionRepository extends JpaRepository<TrainingSession, UUID> 
     Optional<TrainingSession> findByIdempotencyKey(String key);
 
     boolean existsByIdempotencyKey(String key);
+
+    long countByStatus(TrainingSession.SessionStatus status);
+
+    long countByUserId(UUID userId);
+
+    long countByUserIdAndStatus(UUID userId, TrainingSession.SessionStatus status);
 }

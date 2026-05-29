@@ -3,9 +3,11 @@ package com.meridian.service;
 import com.meridian.dto.SessionDto.ActivityUpdate;
 import com.meridian.dto.SessionDto.CreateSessionRequest;
 import com.meridian.dto.SessionDto.UpdateSessionRequest;
+import com.meridian.entity.AssessmentItem;
 import com.meridian.entity.SessionActivity;
 import com.meridian.entity.TrainingSession;
 import com.meridian.exception.AppException;
+import com.meridian.repository.AssessmentItemRepository;
 import com.meridian.repository.CourseRepository;
 import com.meridian.repository.SessionActivityRepository;
 import com.meridian.repository.SessionRepository;
@@ -33,13 +35,16 @@ public class SessionService {
     private final SessionRepository sessionRepository;
     private final SessionActivityRepository sessionActivityRepository;
     private final CourseRepository courseRepository;
+    private final AssessmentItemRepository assessmentItemRepository;
 
     public SessionService(SessionRepository sessionRepository,
                           SessionActivityRepository sessionActivityRepository,
-                          CourseRepository courseRepository) {
+                          CourseRepository courseRepository,
+                          AssessmentItemRepository assessmentItemRepository) {
         this.sessionRepository = sessionRepository;
         this.sessionActivityRepository = sessionActivityRepository;
         this.courseRepository = courseRepository;
+        this.assessmentItemRepository = assessmentItemRepository;
     }
 
     public TrainingSession createSession(UUID userId, CreateSessionRequest req) {
@@ -60,7 +65,20 @@ public class SessionService {
         session.setSyncStatus(TrainingSession.SyncStatus.SYNCED);
 
         TrainingSession saved = sessionRepository.save(session);
-        log.info("Created training session {} for user {}", saved.getId(), userId);
+
+        // Seed the per-session activity checklist from the course's assessment items
+        // so the student has concrete activities to complete and check off.
+        List<AssessmentItem> items = assessmentItemRepository.findByCourseId(req.courseId());
+        for (AssessmentItem item : items) {
+            SessionActivity activity = new SessionActivity();
+            activity.setSessionId(saved.getId());
+            activity.setActivityRef(item.getQuestion());
+            activity.setCompleted(false);
+            sessionActivityRepository.save(activity);
+        }
+
+        log.info("Created training session {} for user {} with {} activities",
+                saved.getId(), userId, items.size());
         return saved;
     }
 

@@ -21,30 +21,32 @@ import { ApiService } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
 
 interface MasteryTrend {
-  courseId: string;
-  courseName: string;
-  masteryPct: number;
-  period: string;
+  week: string;
+  masteryRate: number;
+  totalAttempts: number;
 }
 
 interface WrongAnswer {
   itemId: string;
-  itemText: string;
-  errorCount: number;
-  topWrongAnswer: string;
+  question: string;
+  knowledgePoint: string;
+  wrongCount: number;
+  wrongRate: number;
 }
 
 interface KnowledgeGap {
-  topicArea: string;
-  gapScore: number;
-  affectedStudents: number;
+  knowledgePoint: string;
+  wrongRate: number;
+  totalAttempts: number;
 }
 
 interface ItemDifficulty {
   itemId: string;
-  itemText: string;
-  difficultyIndex: number;
-  discriminationIndex: number;
+  question: string;
+  storedDifficulty: number;
+  observedDifficulty: number;
+  discrimination: number;
+  totalAttempts: number;
 }
 
 @Component({
@@ -139,34 +141,34 @@ interface ItemDifficulty {
                   class="mastery-bar-row"
                   *ngFor="let row of masteryTrends"
                 >
-                  <span class="bar-label">{{ row.courseName }}</span>
+                  <span class="bar-label">{{ row.week }}</span>
                   <div class="bar-track">
                     <div
                       class="bar-fill"
-                      [style.width.%]="row.masteryPct"
-                      [class.bar-high]="row.masteryPct >= 80"
-                      [class.bar-medium]="row.masteryPct >= 60 && row.masteryPct < 80"
-                      [class.bar-low]="row.masteryPct < 60"
+                      [style.width.%]="row.masteryRate"
+                      [class.bar-high]="row.masteryRate >= 80"
+                      [class.bar-medium]="row.masteryRate >= 60 && row.masteryRate < 80"
+                      [class.bar-low]="row.masteryRate < 60"
                     ></div>
                   </div>
-                  <span class="bar-pct">{{ row.masteryPct }}%</span>
+                  <span class="bar-pct">{{ row.masteryRate }}%</span>
                 </div>
               </div>
               <table mat-table [dataSource]="masteryTrends" class="full-width-table mt-16">
-                <ng-container matColumnDef="courseName">
-                  <th mat-header-cell *matHeaderCellDef>Course</th>
-                  <td mat-cell *matCellDef="let r">{{ r.courseName }}</td>
+                <ng-container matColumnDef="week">
+                  <th mat-header-cell *matHeaderCellDef>Week</th>
+                  <td mat-cell *matCellDef="let r">{{ r.week }}</td>
                 </ng-container>
-                <ng-container matColumnDef="masteryPct">
+                <ng-container matColumnDef="masteryRate">
                   <th mat-header-cell *matHeaderCellDef>Mastery %</th>
-                  <td mat-cell *matCellDef="let r">{{ r.masteryPct }}%</td>
+                  <td mat-cell *matCellDef="let r">{{ r.masteryRate }}%</td>
                 </ng-container>
-                <ng-container matColumnDef="period">
-                  <th mat-header-cell *matHeaderCellDef>Period</th>
-                  <td mat-cell *matCellDef="let r">{{ r.period }}</td>
+                <ng-container matColumnDef="totalAttempts">
+                  <th mat-header-cell *matHeaderCellDef>Attempts</th>
+                  <td mat-cell *matCellDef="let r">{{ r.totalAttempts }}</td>
                 </ng-container>
-                <tr mat-header-row *matHeaderRowDef="['courseName','masteryPct','period']"></tr>
-                <tr mat-row *matRowDef="let r; columns: ['courseName','masteryPct','period']"></tr>
+                <tr mat-header-row *matHeaderRowDef="['week','masteryRate','totalAttempts']"></tr>
+                <tr mat-row *matRowDef="let r; columns: ['week','masteryRate','totalAttempts']"></tr>
               </table>
             </ng-container>
           </div>
@@ -188,20 +190,24 @@ interface ItemDifficulty {
               class="full-width-table"
               *ngIf="!loadingWrong && wrongAnswers.length > 0"
             >
-              <ng-container matColumnDef="itemText">
+              <ng-container matColumnDef="question">
                 <th mat-header-cell *matHeaderCellDef>Item</th>
-                <td mat-cell *matCellDef="let r">{{ r.itemText }}</td>
+                <td mat-cell *matCellDef="let r">{{ r.question }}</td>
               </ng-container>
-              <ng-container matColumnDef="errorCount">
-                <th mat-header-cell *matHeaderCellDef>Error Count</th>
-                <td mat-cell *matCellDef="let r">{{ r.errorCount }}</td>
+              <ng-container matColumnDef="knowledgePoint">
+                <th mat-header-cell *matHeaderCellDef>Knowledge Point</th>
+                <td mat-cell *matCellDef="let r">{{ r.knowledgePoint }}</td>
               </ng-container>
-              <ng-container matColumnDef="topWrongAnswer">
-                <th mat-header-cell *matHeaderCellDef>Top Wrong Answer</th>
-                <td mat-cell *matCellDef="let r">{{ r.topWrongAnswer }}</td>
+              <ng-container matColumnDef="wrongCount">
+                <th mat-header-cell *matHeaderCellDef>Wrong Count</th>
+                <td mat-cell *matCellDef="let r">{{ r.wrongCount }}</td>
               </ng-container>
-              <tr mat-header-row *matHeaderRowDef="['itemText','errorCount','topWrongAnswer']"></tr>
-              <tr mat-row *matRowDef="let r; columns: ['itemText','errorCount','topWrongAnswer']"></tr>
+              <ng-container matColumnDef="wrongRate">
+                <th mat-header-cell *matHeaderCellDef>Wrong %</th>
+                <td mat-cell *matCellDef="let r">{{ r.wrongRate }}%</td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="['question','knowledgePoint','wrongCount','wrongRate']"></tr>
+              <tr mat-row *matRowDef="let r; columns: ['question','knowledgePoint','wrongCount','wrongRate']"></tr>
             </table>
           </div>
         </mat-tab>
@@ -222,20 +228,20 @@ interface ItemDifficulty {
               class="full-width-table"
               *ngIf="!loadingGaps && knowledgeGaps.length > 0"
             >
-              <ng-container matColumnDef="topicArea">
-                <th mat-header-cell *matHeaderCellDef>Topic Area</th>
-                <td mat-cell *matCellDef="let r">{{ r.topicArea }}</td>
+              <ng-container matColumnDef="knowledgePoint">
+                <th mat-header-cell *matHeaderCellDef>Knowledge Point</th>
+                <td mat-cell *matCellDef="let r">{{ r.knowledgePoint }}</td>
               </ng-container>
-              <ng-container matColumnDef="gapScore">
-                <th mat-header-cell *matHeaderCellDef>Gap Score</th>
-                <td mat-cell *matCellDef="let r">{{ r.gapScore | number: '1.2-2' }}</td>
+              <ng-container matColumnDef="wrongRate">
+                <th mat-header-cell *matHeaderCellDef>Wrong %</th>
+                <td mat-cell *matCellDef="let r">{{ r.wrongRate | number: '1.2-2' }}%</td>
               </ng-container>
-              <ng-container matColumnDef="affectedStudents">
-                <th mat-header-cell *matHeaderCellDef>Affected Students</th>
-                <td mat-cell *matCellDef="let r">{{ r.affectedStudents }}</td>
+              <ng-container matColumnDef="totalAttempts">
+                <th mat-header-cell *matHeaderCellDef>Total Attempts</th>
+                <td mat-cell *matCellDef="let r">{{ r.totalAttempts }}</td>
               </ng-container>
-              <tr mat-header-row *matHeaderRowDef="['topicArea','gapScore','affectedStudents']"></tr>
-              <tr mat-row *matRowDef="let r; columns: ['topicArea','gapScore','affectedStudents']"></tr>
+              <tr mat-header-row *matHeaderRowDef="['knowledgePoint','wrongRate','totalAttempts']"></tr>
+              <tr mat-row *matRowDef="let r; columns: ['knowledgePoint','wrongRate','totalAttempts']"></tr>
             </table>
           </div>
         </mat-tab>
@@ -256,20 +262,24 @@ interface ItemDifficulty {
               class="full-width-table"
               *ngIf="!loadingDifficulty && itemDifficulty.length > 0"
             >
-              <ng-container matColumnDef="itemText">
+              <ng-container matColumnDef="question">
                 <th mat-header-cell *matHeaderCellDef>Item</th>
-                <td mat-cell *matCellDef="let r">{{ r.itemText }}</td>
+                <td mat-cell *matCellDef="let r">{{ r.question }}</td>
               </ng-container>
-              <ng-container matColumnDef="difficultyIndex">
-                <th mat-header-cell *matHeaderCellDef>Difficulty</th>
-                <td mat-cell *matCellDef="let r">{{ r.difficultyIndex | number: '1.3-3' }}</td>
+              <ng-container matColumnDef="storedDifficulty">
+                <th mat-header-cell *matHeaderCellDef>Stored Difficulty</th>
+                <td mat-cell *matCellDef="let r">{{ r.storedDifficulty | number: '1.3-3' }}</td>
               </ng-container>
-              <ng-container matColumnDef="discriminationIndex">
+              <ng-container matColumnDef="observedDifficulty">
+                <th mat-header-cell *matHeaderCellDef>Observed Difficulty</th>
+                <td mat-cell *matCellDef="let r">{{ r.observedDifficulty | number: '1.3-3' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="discrimination">
                 <th mat-header-cell *matHeaderCellDef>Discrimination</th>
-                <td mat-cell *matCellDef="let r">{{ r.discriminationIndex | number: '1.3-3' }}</td>
+                <td mat-cell *matCellDef="let r">{{ r.discrimination | number: '1.3-3' }}</td>
               </ng-container>
-              <tr mat-header-row *matHeaderRowDef="['itemText','difficultyIndex','discriminationIndex']"></tr>
-              <tr mat-row *matRowDef="let r; columns: ['itemText','difficultyIndex','discriminationIndex']"></tr>
+              <tr mat-header-row *matHeaderRowDef="['question','storedDifficulty','observedDifficulty','discrimination']"></tr>
+              <tr mat-row *matRowDef="let r; columns: ['question','storedDifficulty','observedDifficulty','discrimination']"></tr>
             </table>
           </div>
         </mat-tab>
@@ -453,7 +463,7 @@ export class AnalyticsDashboardComponent implements OnInit {
 
   private loadMastery(): void {
     this.loadingMastery = true;
-    this.apiService.get<MasteryTrend[]>('/analytics/mastery-trends', this.buildParams()).subscribe({
+    this.apiService.get<MasteryTrend[]>('/analytics/mastery', this.buildParams()).subscribe({
       next: (data) => {
         this.masteryTrends = data;
         this.loadingMastery = false;

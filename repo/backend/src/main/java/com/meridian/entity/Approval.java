@@ -29,7 +29,7 @@ public class Approval {
     /**
      * Status values: PENDING, APPROVED, REJECTED
      */
-    @Column(name = "status", nullable = false, columnDefinition = "approval_status")
+    @Column(name = "status", nullable = false)
     private String status;
 
     @Column(name = "entity_type")

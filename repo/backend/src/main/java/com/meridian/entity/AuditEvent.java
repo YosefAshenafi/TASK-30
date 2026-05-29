@@ -20,7 +20,7 @@ public class AuditEvent {
     @Column(name = "user_id")
     private UUID userId;
 
-    @Column(name = "event_type", nullable = false, columnDefinition = "audit_event_type")
+    @Column(name = "event_type", nullable = false)
     private String eventType;
 
     @Column(name = "entity_type")
@@ -32,7 +32,7 @@ public class AuditEvent {
     /**
      * JSONB stored as text in the database.
      */
-    @Column(name = "details", columnDefinition = "jsonb")
+    @Column(name = "details")
     private String details;
 
     @Column(name = "ip_address")

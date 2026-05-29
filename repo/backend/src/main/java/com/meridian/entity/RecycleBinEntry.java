@@ -26,7 +26,7 @@ public class RecycleBinEntry {
     /**
      * Original entity data serialized as JSON.
      */
-    @Column(name = "original_data", columnDefinition = "jsonb")
+    @Column(name = "original_data")
     private String originalData;
 
     @Column(name = "deleted_by", nullable = false)

@@ -38,7 +38,7 @@ public class DraftAssessment {
     private String idempotencyKey;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "sync_status", nullable = false, columnDefinition = "sync_status")
+    @Column(name = "sync_status", nullable = false)
     private SyncStatus syncStatus = SyncStatus.PENDING;
 
     @Column(name = "last_modified", nullable = false)

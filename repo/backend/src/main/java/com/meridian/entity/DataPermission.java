@@ -26,7 +26,7 @@ public class DataPermission {
     /**
      * Classification values: PUBLIC, INTERNAL, CONFIDENTIAL, RESTRICTED
      */
-    @Column(name = "classification", nullable = false, columnDefinition = "classification")
+    @Column(name = "classification", nullable = false)
     private String classification;
 
     @Column(name = "granted_by")

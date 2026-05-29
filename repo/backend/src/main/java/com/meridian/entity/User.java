@@ -42,7 +42,7 @@ public class User implements UserDetails {
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, columnDefinition = "user_status")
+    @Column(nullable = false)
     private UserStatus status = UserStatus.PENDING;
 
     @Column(name = "organization_id")

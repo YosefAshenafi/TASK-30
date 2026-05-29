@@ -4,8 +4,8 @@ Project Type: Fullstack Web Application
 
 ## Architecture & Tech Stack
 
-- **Frontend**: Angular 17 + Angular Material (TypeScript), served by Nginx on port 4200
-- **Backend**: Spring Boot 3.2 (Java 17), REST API on port 8080
+- **Frontend**: Angular 17 + Angular Material (TypeScript), served by Nginx on port 3000 (single access point)
+- **Backend**: Spring Boot 3.2 (Java 17) REST API, reverse-proxied by Nginx under `http://localhost:3000/api` and `http://localhost:3000/actuator`
 - **Database**: PostgreSQL 15 (Flyway migrations, 22 tables)
 - **Containerization**: Docker + Docker Compose (all services containerized)
 - **Offline**: IndexedDB (Dexie.js) + background sync with idempotency keys
@@ -46,10 +46,12 @@ repo/
 
 1. `cd repo`
 2. `docker-compose up`
-3. **Frontend**: http://localhost:4200
-4. **Backend API**: http://localhost:8080
-5. **Health check**: http://localhost:8080/actuator/health
+3. **Frontend (access point)**: http://localhost:3000
+4. **Backend API** (via Nginx proxy): http://localhost:3000/api
+5. **Health check**: http://localhost:3000/actuator/health
 6. **Stop**: `docker-compose down -v`
+
+> The database schema and seed data (roles, organizations, and the demo users below) are applied automatically by Flyway migrations on backend startup — no separate seed command is required. Migrations are idempotent, so repeated `docker compose up` runs are safe.
 
 > To rebuild images after code changes: `docker-compose up --build` (or `docker compose up --build` on Compose v2).
 
@@ -65,10 +67,10 @@ chmod +x run_tests.sh
 
 **API health check:**
 ```bash
-curl http://localhost:8080/actuator/health
+curl http://localhost:3000/actuator/health
 # Expected: {"status":"UP"}
 
-curl -X POST http://localhost:8080/api/auth/login \
+curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"Admin@12345678"}'
 # Expected: 200 JSON body containing "accessToken" and nested "user" object with username "admin"
@@ -76,19 +78,19 @@ curl -X POST http://localhost:8080/api/auth/login \
 
 **Web UI verification flow:**
 
-1. Open http://localhost:4200 in a browser.
+1. Open http://localhost:3000 in a browser.
    - **Expected:** Redirected to `/login`; page shows "Meridian Training Analytics" title and a sign-in form with Username and Password fields.
 
 2. Enter username `admin` / password `Admin@12345678` and click **Sign In**.
    - **Expected:** Redirected to `/dashboard`; left-hand navigation shows Dashboard, User Management, Backup & DR, and Governance links (admin-only items visible).
 
-3. Click **Analytics** in the nav (or navigate to http://localhost:4200/analytics).
+3. Click **Analytics** in the nav (or navigate to http://localhost:3000/analytics).
    - **Expected:** Analytics Dashboard page loads with four tabs: Mastery Trends, Wrong Answers, Knowledge Gaps, Item Difficulty. Spinner appears briefly, then data or empty-state message renders.
 
-4. Navigate to http://localhost:4200/reports.
+4. Navigate to http://localhost:3000/reports.
    - **Expected:** Reports Center page loads with tabs for Enrollments, Seat Utilization, Refunds, Inventory, Certifications. A notification bell icon is visible in the top-right of the page header.
 
-5. Navigate to http://localhost:4200/admin/users.
+5. Navigate to http://localhost:3000/admin/users.
    - **Expected:** User Management page loads with "Pending Approvals" and "All Users" tabs. The All Users tab shows a paginated table of seeded users (admin, faculty1, corp1, student1).
 
 6. Click the **Logout** button in the nav.
@@ -97,7 +99,7 @@ curl -X POST http://localhost:8080/api/auth/login \
 7. Log in as `student1` / `Student@12345678`.
    - **Expected:** Redirected to `/dashboard`; navigation shows only Dashboard and My Sessions (no admin or mentor links).
 
-8. Navigate to http://localhost:4200/sessions.
+8. Navigate to http://localhost:3000/sessions.
    - **Expected:** My Sessions page loads showing a table or empty state. A "New Session" button is visible.
 
 ## Seeded Credentials
@@ -159,8 +161,8 @@ curl -X POST http://localhost:8080/api/auth/login \
 4. **Restart services**: `docker-compose up` (or `docker-compose up --build` if images need rebuilding).
 5. **Verify recovery**: Run the health check and confirm seeded users can log in:
    ```bash
-   curl http://localhost:8080/actuator/health
-   curl -X POST http://localhost:8080/api/auth/login \
+   curl http://localhost:3000/actuator/health
+   curl -X POST http://localhost:3000/api/auth/login \
      -H "Content-Type: application/json" \
      -d '{"username":"admin","password":"Admin@12345678"}'
    ```
@@ -177,7 +179,7 @@ Perform a DR drill at least once per quarter to validate backup integrity and te
 4. Execute the Web UI Verification Flow (steps 1–8 in the Testing section) against the restored environment.
 5. Record the drill outcome via the API:
    ```bash
-   curl -X POST http://localhost:8080/api/admin/recovery-drills \
+   curl -X POST http://localhost:3000/api/admin/recovery-drills \
      -H "Authorization: Bearer <admin-token>" \
      -H "Content-Type: application/json" \
      -d '{

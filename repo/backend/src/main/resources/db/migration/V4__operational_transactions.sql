@@ -5,7 +5,7 @@ CREATE TABLE operational_transactions (
     initiated_by     UUID REFERENCES users(id) ON DELETE SET NULL,
     entity_type      VARCHAR(100),
     entity_id        VARCHAR(255),
-    details          JSONB,
+    details          TEXT,
     status           VARCHAR(50) NOT NULL DEFAULT 'COMPLETED',
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

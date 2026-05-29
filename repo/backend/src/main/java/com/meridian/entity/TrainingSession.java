@@ -36,7 +36,7 @@ public class TrainingSession {
     private UUID courseId;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, columnDefinition = "session_status")
+    @Column(nullable = false)
     private SessionStatus status = SessionStatus.IN_PROGRESS;
 
     @Column(name = "rest_timer_secs", nullable = false)
@@ -55,7 +55,7 @@ public class TrainingSession {
     private String courseVersion;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "sync_status", nullable = false, columnDefinition = "sync_status")
+    @Column(name = "sync_status", nullable = false)
     private SyncStatus syncStatus = SyncStatus.SYNCED;
 
     @Column(name = "deleted_at")

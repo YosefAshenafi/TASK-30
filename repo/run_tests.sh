@@ -45,11 +45,11 @@ fi
 echo "[5/5] Running E2E tests (Playwright)..."
 docker compose up -d frontend backend
 echo "Waiting for frontend to be ready..."
-until docker compose exec -T frontend curl -sf http://localhost:80/ > /dev/null 2>&1; do
+until docker compose exec -T frontend wget -q --spider http://localhost:3000/ > /dev/null 2>&1; do
   sleep 2
 done
 docker compose run --rm \
-  -e BASE_URL=http://frontend:80 \
+  -e BASE_URL=http://frontend:3000 \
   playwright npx playwright test --reporter=line 2>&1
 E2E_EXIT=$?
 if [ $E2E_EXIT -eq 0 ]; then

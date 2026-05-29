@@ -101,7 +101,9 @@ export class AuthService {
     this.userSubject.next({
       userId: res.user.id,
       username: res.user.username,
-      role: res.user.role,
+      // Backend returns Spring authorities prefixed with ROLE_ (e.g. ROLE_ADMINISTRATOR);
+      // client navigation and route guards compare against unprefixed role names.
+      role: res.user.role?.replace(/^ROLE_/, '') ?? res.user.role,
       organizationId: res.user.organizationId,
     });
   }

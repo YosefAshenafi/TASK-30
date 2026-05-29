@@ -24,7 +24,14 @@ public class SessionDto {
             int restTimerSecs,
             Instant startedAt,
             Instant completedAt,
-            String syncStatus
+            String syncStatus,
+            List<SessionActivityDto> activities
+    ) {}
+
+    public record SessionActivityDto(
+            UUID activityId,
+            String name,
+            boolean completed
     ) {}
 
     public record UpdateSessionRequest(

@@ -1,6 +1,6 @@
 import { test, expect, request } from '@playwright/test';
 
-const BASE_API = process.env['BASE_URL'] ?? 'http://localhost:8080';
+const BASE_API = process.env['BASE_URL'] ?? 'http://localhost:3000';
 
 async function apiLogin(username: string, password: string): Promise<string> {
   const ctx = await request.newContext({ baseURL: BASE_API });

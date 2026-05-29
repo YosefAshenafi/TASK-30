@@ -20,7 +20,7 @@ public class Notification {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    @Column(nullable = false, columnDefinition = "notif_type")
+    @Column(nullable = false)
     private String type;
 
     @Column(nullable = false)

@@ -85,7 +85,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:4200"));
+        // The SPA is served same-origin behind Nginx; allow any host/port the app is
+        // reached on (localhost, 127.0.0.1, container hostname, LAN IP) so API calls
+        // are never rejected by a hardcoded origin. Patterns are required (not "*")
+        // when credentials are allowed.
+        config.setAllowedOriginPatterns(List.of("*"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

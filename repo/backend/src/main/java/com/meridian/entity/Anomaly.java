@@ -23,7 +23,7 @@ public class Anomaly {
     @Column(name = "type", nullable = false)
     private String type;
 
-    @Column(name = "details", columnDefinition = "jsonb")
+    @Column(name = "details")
     private String details;
 
     @Column(name = "ip_address")

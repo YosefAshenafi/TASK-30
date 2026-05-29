@@ -23,13 +23,13 @@ public class ReportSchedule {
     @Column(name = "organization_id")
     private UUID organizationId;
 
-    @Column(name = "report_type", nullable = false, columnDefinition = "report_type")
+    @Column(name = "report_type", nullable = false)
     private String reportType;
 
     @Column(name = "cron_expression", nullable = false)
     private String cronExpression;
 
-    @Column(name = "output_format", nullable = false, columnDefinition = "report_format")
+    @Column(name = "output_format", nullable = false)
     private String outputFormat;
 
     @Column(name = "output_path", nullable = false)

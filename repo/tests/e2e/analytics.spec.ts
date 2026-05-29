@@ -30,7 +30,7 @@ test.describe('Analytics', () => {
   });
 
   test('corporate mentor sees analytics scoped to own org', async ({ page, request }) => {
-    const BASE_API = process.env['BASE_URL'] ?? 'http://localhost:8080';
+    const BASE_API = process.env['BASE_URL'] ?? 'http://localhost:3000';
 
     // Verify via API that corporate mentor gets org-scoped mastery data (200, not cross-tenant data)
     const ctx = await request.newContext({ baseURL: BASE_API });

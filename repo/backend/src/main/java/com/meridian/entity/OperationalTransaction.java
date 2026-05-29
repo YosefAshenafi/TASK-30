@@ -29,7 +29,7 @@ public class OperationalTransaction {
     @Column(name = "entity_id")
     private String entityId;
 
-    @Column(columnDefinition = "JSONB")
+    @Column(columnDefinition = "TEXT")
     private String details;
 
     @Column(nullable = false)

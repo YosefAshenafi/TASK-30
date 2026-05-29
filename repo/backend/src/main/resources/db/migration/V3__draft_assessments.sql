@@ -7,7 +7,7 @@ CREATE TABLE draft_assessments (
     flagged          BOOLEAN NOT NULL DEFAULT FALSE,
     time_spent_secs  INT NOT NULL DEFAULT 0,
     idempotency_key  VARCHAR(255) NOT NULL UNIQUE,
-    sync_status      sync_status NOT NULL DEFAULT 'PENDING',
+    sync_status      VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     last_modified    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

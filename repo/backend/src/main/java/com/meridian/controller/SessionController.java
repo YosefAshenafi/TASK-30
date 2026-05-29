@@ -1,10 +1,12 @@
 package com.meridian.controller;
 
 import com.meridian.dto.SessionDto.CreateSessionRequest;
+import com.meridian.dto.SessionDto.SessionActivityDto;
 import com.meridian.dto.SessionDto.SessionResponse;
 import com.meridian.dto.SessionDto.UpdateSessionRequest;
 import com.meridian.entity.SessionActivity;
 import com.meridian.entity.TrainingSession;
+import com.meridian.repository.SessionActivityRepository;
 import com.meridian.service.SessionService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -32,9 +34,12 @@ import java.util.UUID;
 public class SessionController {
 
     private final SessionService sessionService;
+    private final SessionActivityRepository sessionActivityRepository;
 
-    public SessionController(SessionService sessionService) {
+    public SessionController(SessionService sessionService,
+                            SessionActivityRepository sessionActivityRepository) {
         this.sessionService = sessionService;
+        this.sessionActivityRepository = sessionActivityRepository;
     }
 
     @PostMapping
@@ -100,6 +105,11 @@ public class SessionController {
     }
 
     private SessionResponse toDto(TrainingSession session) {
+        List<SessionActivityDto> activities = sessionActivityRepository
+                .findBySessionId(session.getId())
+                .stream()
+                .map(a -> new SessionActivityDto(a.getId(), a.getActivityRef(), a.isCompleted()))
+                .toList();
         return new SessionResponse(
                 session.getId(),
                 session.getUserId(),
@@ -108,7 +118,8 @@ public class SessionController {
                 session.getRestTimerSecs(),
                 session.getStartedAt(),
                 session.getCompletedAt(),
-                session.getSyncStatus().name()
+                session.getSyncStatus().name(),
+                activities
         );
     }
 }

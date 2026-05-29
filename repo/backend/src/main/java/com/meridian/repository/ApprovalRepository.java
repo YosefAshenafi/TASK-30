@@ -17,4 +17,6 @@ public interface ApprovalRepository extends JpaRepository<Approval, UUID> {
     Page<Approval> findByRequesterId(UUID requesterId, Pageable pageable);
 
     Optional<Approval> findByIdAndStatus(UUID id, String status);
+
+    long countByStatus(String status);
 }
