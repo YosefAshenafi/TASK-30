@@ -7,6 +7,7 @@ import com.meridian.exception.AppException;
 import com.meridian.repository.ApprovalRepository;
 import com.meridian.repository.UserRepository;
 import com.meridian.service.ApprovalService;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -54,7 +55,7 @@ public class ApprovalController {
      */
     @PostMapping
     public ResponseEntity<Approval> createApproval(
-            @RequestBody CreateApprovalRequest request,
+            @Valid @RequestBody CreateApprovalRequest request,
             Authentication authentication) {
         User currentUser = resolveCurrentUser(authentication);
         Approval approval = approvalService.createApproval(

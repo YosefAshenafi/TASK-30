@@ -25,24 +25,19 @@ test.describe('Sessions', () => {
   test('offline banner shows when network intercepted', async ({ page }) => {
     await loginAs(page, 'student1', 'Student@12345678');
 
-    // Load a session and then cut network to simulate offline
-    await page.goto('/sessions');
-    await page.waitForLoadState('networkidle');
-
-    // Intercept all API requests to simulate going offline
-    await page.route('**/api/**', (route) => route.abort('internetdisconnected'));
-
-    // Trigger an action that would go to session capture
-    // The offline banner should appear when the component detects offline status
-    await page.evaluate(() => {
-      window.dispatchEvent(new Event('offline'));
-    });
-
-    // Navigate to sessions/new — API calls will fail (offline mode)
+    // Open the capture screen while still online so the component mounts and subscribes to the
+    // SyncService offline stream (offlineMode$ is a live window-event stream with no replay, so
+    // the subscription must exist before the offline event fires).
     await page.goto('/sessions/new');
+    await page.waitForLoadState('domcontentloaded');
 
-    // Give time for the offline banner to render
+    // Now go offline. Playwright fires the window 'offline' event the component listens for,
+    // which flips isOffline and reveals the banner.
+    await page.context().setOffline(true);
+
     const offlineBanner = page.locator('.offline-banner');
-    await expect(offlineBanner).toBeVisible({ timeout: 5000 });
+    await expect(offlineBanner).toBeVisible({ timeout: 8000 });
+
+    await page.context().setOffline(false);
   });
 });

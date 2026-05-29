@@ -17,16 +17,16 @@ INSERT INTO organizations(id, name) VALUES
 -- student1  → Student@12345678
 INSERT INTO users(id, username, password_hash, status, organization_id) VALUES
     ('33333333-0000-0000-0000-000000000001', 'admin',
-     '$2a$12$LrHcAeSMCQJrjPqDZ9gfWO7hLX9o0xVzBHU3wHNXGXjVlV/o1.TJ6',
+     '$2a$12$jNsnZz9PlzMaMs6XV2XOyuMDlqMn5DeodFW09Ti2EPduys4yZVPD.',
      'ACTIVE', NULL),
     ('33333333-0000-0000-0000-000000000002', 'faculty1',
-     '$2a$12$aSC2LRXsxoX.dpLrVFiV5.MFML4fJxCkv9MxilD4axBiYqCWpXcey',
+     '$2a$12$Ts5eRjlFh6Sp/rrNmtYUXOQrb2KJokw9dq.O1bFX3SKy6pQ7DGZhe',
      'ACTIVE', '22222222-0000-0000-0000-000000000002'),
     ('33333333-0000-0000-0000-000000000003', 'corp1',
-     '$2a$12$nNMhiJifmqXIJSTKFRXL1.xOovh4r/9AE85E0g3cVxFXDtEO3vgje',
+     '$2a$12$5/KqG4qCWyPo4yPIeLQY9u5tTlaFCosfsWehvDm4ywTSWoseVmPjC',
      'ACTIVE', '22222222-0000-0000-0000-000000000001'),
     ('33333333-0000-0000-0000-000000000004', 'student1',
-     '$2a$12$R9E0cW1X3z3o/rT7MPJpTOBzBuM7.NZd3PkuaHOEd.dOfPVs3J.S.',
+     '$2a$12$vYiHDGlN3ryyiY7HGTqstObt/aLJtWS.Upe2iIPyP29ZhxBH6OnNW',
      'ACTIVE', NULL);
 
 -- Assign roles

@@ -2,6 +2,7 @@ import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of, throwError } from 'rxjs';
 import { GovernanceComponent } from './governance.component';
 import { ApiService } from '../core/api.service';
@@ -28,7 +29,7 @@ describe('GovernanceComponent', () => {
     apiService = jasmine.createSpyObj('ApiService', ['get', 'post']);
     snackBar = jasmine.createSpyObj('MatSnackBar', ['open']);
 
-    apiService.get.and.callFake((url: string) => {
+    apiService.get.and.callFake((url: string): any => {
       if (url === '/admin/users') return of(users);
       if (url.includes('/governance/users/')) return of(permissions);
       return of([]);
@@ -39,9 +40,13 @@ describe('GovernanceComponent', () => {
       providers: [
         { provide: ApiService, useValue: apiService },
         { provide: MatSnackBar, useValue: snackBar },
+        provideNoopAnimations(),
       ],
       schemas: [NO_ERRORS_SCHEMA],
     });
+
+    // Force the MatSnackBar mock (providedIn 'root' is otherwise shadowed by the component injector).
+    TestBed.overrideProvider(MatSnackBar, { useValue: snackBar });
   });
 
   it('should be created', () => {
@@ -97,6 +102,13 @@ describe('GovernanceComponent', () => {
       grantedAt: '2025-02-01T00:00:00Z',
     };
     apiService.post.and.returnValue(of(newPerm));
+    // Return a fresh permissions array for the load so grantPermission()'s
+    // in-place push does not mutate the shared `permissions` fixture const.
+    apiService.get.and.callFake((url: string): any => {
+      if (url === '/admin/users') return of(users);
+      if (url.includes('/governance/users/')) return of([...permissions]);
+      return of([]);
+    });
 
     const fixture = TestBed.createComponent(GovernanceComponent);
     fixture.detectChanges();
@@ -146,7 +158,7 @@ describe('GovernanceComponent', () => {
     expect(comp.getClassBadge('CONFIDENTIAL')).toBe('class-confidential');
     expect(comp.getClassBadge('PUBLIC')).toBe('class-public');
     expect(comp.getClassBadge('RESTRICTED')).toBe('class-restricted');
-  }));
+  });
 
   it('sets errorMessage when users load fails', fakeAsync(() => {
     apiService.get.and.returnValue(throwError(() => new Error('fail')));

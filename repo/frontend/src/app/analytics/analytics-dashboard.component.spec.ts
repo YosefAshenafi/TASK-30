@@ -1,6 +1,8 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { AnalyticsDashboardComponent } from './analytics-dashboard.component';
 import { ApiService } from '../core/api.service';
@@ -10,17 +12,19 @@ describe('AnalyticsDashboardComponent', () => {
   let apiService: jasmine.SpyObj<ApiService>;
   let authService: jasmine.SpyObj<AuthService>;
 
+  // Fixtures mirror the component's model interfaces (MasteryTrend, WrongAnswer, KnowledgeGap,
+  // ItemDifficulty) so they are assignable where the typed component arrays are asserted.
   const masteryData = [
-    { courseId: 'c1', courseName: 'Course A', masteryPct: 75, period: '2025-01' },
+    { week: '2025-W01', masteryRate: 75, totalAttempts: 40 },
   ];
   const wrongAnswerData = [
-    { itemId: 'i1', itemText: 'Question 1', errorCount: 12, topWrongAnswer: 'B' },
+    { itemId: 'i1', question: 'Question 1', knowledgePoint: 'Algebra', wrongCount: 12, wrongRate: 0.3 },
   ];
   const knowledgeGapData = [
-    { topicArea: 'Algebra', gapScore: 0.42, affectedStudents: 8 },
+    { knowledgePoint: 'Algebra', wrongRate: 0.42, totalAttempts: 8 },
   ];
   const itemDiffData = [
-    { itemId: 'i2', itemText: 'Hard Question', difficultyIndex: 0.3, discriminationIndex: 0.55 },
+    { itemId: 'i2', question: 'Hard Question', storedDifficulty: 0.3, observedDifficulty: 0.35, discrimination: 0.55, totalAttempts: 20 },
   ];
 
   beforeEach(() => {
@@ -33,6 +37,8 @@ describe('AnalyticsDashboardComponent', () => {
       providers: [
         { provide: ApiService, useValue: apiService },
         { provide: AuthService, useValue: authService },
+        provideNoopAnimations(),
+        provideRouter([]),
       ],
       schemas: [NO_ERRORS_SCHEMA],
     });
@@ -51,7 +57,7 @@ describe('AnalyticsDashboardComponent', () => {
     tick();
 
     expect(apiService.get).toHaveBeenCalledWith(
-      jasmine.stringMatching('/analytics/mastery-trends'),
+      jasmine.stringMatching('/analytics/mastery'),
       jasmine.any(Object)
     );
     expect(fixture.componentInstance.masteryTrends).toEqual(masteryData);
@@ -85,7 +91,7 @@ describe('AnalyticsDashboardComponent', () => {
   }));
 
   it('loads knowledge gaps on tab change to index 2', fakeAsync(() => {
-    apiService.get.and.callFake((url: string) => {
+    apiService.get.and.callFake((url: string): any => {
       if (url.includes('knowledge-gaps')) return of(knowledgeGapData);
       return of([]);
     });
@@ -100,7 +106,7 @@ describe('AnalyticsDashboardComponent', () => {
   }));
 
   it('loads item difficulty on tab change to index 3', fakeAsync(() => {
-    apiService.get.and.callFake((url: string) => {
+    apiService.get.and.callFake((url: string): any => {
       if (url.includes('item-difficulty')) return of(itemDiffData);
       return of([]);
     });

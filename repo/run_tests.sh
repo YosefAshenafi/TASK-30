@@ -1,68 +1,73 @@
 #!/usr/bin/env bash
-set -euo pipefail
+#
+# Meridian full test suite. Everything runs in Docker — no local JDK/Node/browser required.
+#
+#   1. Backend unit + API tests   — JUnit 5 + MockMvc + Testcontainers (real PostgreSQL)
+#   2. Frontend unit tests        — Karma/Jasmine on headless Chromium
+#   3. End-to-end tests           — Playwright against the running frontend + backend
+#
+# Each suite runs independently; a failure in one does not abort the others, so the final
+# summary always reports every suite. The script exits non-zero if any suite failed.
+#
+# NOTE: the runtime backend/frontend images are slim (JRE-only / Nginx) and intentionally do
+# not contain Maven, Node, or a browser. Tests therefore run from dedicated build stages
+# (`backend-test`, `frontend-test`) selected via the compose `test` profile.
+
+set -uo pipefail
 cd "$(dirname "$0")"
 
 PASSED=0
 FAILED=0
+declare -a FAILED_SUITES=()
+
+run_suite() {
+  local name="$1"; shift
+  echo ""
+  echo "----------------------------------------------------------------------"
+  echo ">>> ${name}"
+  echo "----------------------------------------------------------------------"
+  if "$@"; then
+    echo "${name}: PASSED"
+    PASSED=$((PASSED + 1))
+  else
+    echo "${name}: FAILED"
+    FAILED=$((FAILED + 1))
+    FAILED_SUITES+=("${name}")
+  fi
+}
+
+cleanup() {
+  echo ""
+  echo "Tearing down containers and volumes..."
+  docker compose --profile test --profile e2e down -v --remove-orphans >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
 
 echo "=== Meridian Test Suite ==="
 
-echo "[1/5] Building images..."
-docker compose build --quiet 2>&1 | tail -5
+echo ""
+echo "[1/4] Building images (runtime + test stages)..."
+docker compose --profile test --profile e2e build
 
-echo "[2/5] Starting DB service..."
-docker compose up -d db
-echo "Waiting for PostgreSQL to be ready..."
-until docker compose exec -T db pg_isready -U postgres -d meridian -q; do
-  sleep 2
-done
-echo "DB ready."
+echo ""
+echo "[2/4] Backend unit + API tests (JUnit 5 + Testcontainers)..."
+run_suite "Backend tests" docker compose run --rm backend-test
 
-echo "[3/5] Running backend unit + API tests (JUnit 5 + Testcontainers)..."
-docker compose run --rm \
-  -e DATABASE_URL=postgresql://postgres:postgres@db:5432/meridian \
-  backend mvn test -q 2>&1
-BACKEND_EXIT=$?
-if [ $BACKEND_EXIT -eq 0 ]; then
-  echo "Backend tests: PASSED"
-  PASSED=$((PASSED + 1))
-else
-  echo "Backend tests: FAILED"
-  FAILED=$((FAILED + 1))
-fi
+echo ""
+echo "[3/4] Frontend unit tests (Karma/Jasmine, headless Chromium)..."
+run_suite "Frontend tests" docker compose run --rm frontend-test
 
-echo "[4/5] Running frontend unit tests (Karma/Jasmine)..."
-docker compose run --rm frontend npm test -- --watch=false --browsers=ChromeHeadless 2>&1
-FRONTEND_EXIT=$?
-if [ $FRONTEND_EXIT -eq 0 ]; then
-  echo "Frontend tests: PASSED"
-  PASSED=$((PASSED + 1))
-else
-  echo "Frontend tests: FAILED"
-  FAILED=$((FAILED + 1))
-fi
-
-echo "[5/5] Running E2E tests (Playwright)..."
-docker compose up -d frontend backend
-echo "Waiting for frontend to be ready..."
-until docker compose exec -T frontend wget -q --spider http://localhost:3000/ > /dev/null 2>&1; do
-  sleep 2
-done
-docker compose run --rm \
-  -e BASE_URL=http://frontend:3000 \
-  playwright npx playwright test --reporter=line 2>&1
-E2E_EXIT=$?
-if [ $E2E_EXIT -eq 0 ]; then
-  echo "E2E tests: PASSED"
-  PASSED=$((PASSED + 1))
-else
-  echo "E2E tests: FAILED"
-  FAILED=$((FAILED + 1))
-fi
-
-docker compose down -v --remove-orphans 2>/dev/null || true
+echo ""
+echo "[4/4] End-to-end tests (Playwright)..."
+echo "Starting db, backend and frontend, then waiting for health checks..."
+docker compose up -d --wait db backend frontend
+run_suite "E2E tests" docker compose run --rm playwright
 
 echo ""
 echo "=== Test Summary ==="
 echo "passed=${PASSED} failed=${FAILED}"
-[ "$FAILED" -eq 0 ]
+if [ "${FAILED}" -ne 0 ]; then
+  echo "Failed suites: ${FAILED_SUITES[*]}"
+fi
+
+[ "${FAILED}" -eq 0 ]

@@ -136,7 +136,10 @@ public class AnomalyDetectionService {
      * exceeded the configured export rate limit in the last 10 minutes, records an
      * anomaly, notifies administrators, and throws HTTP 429 TOO_MANY_REQUESTS.
      */
-    @Transactional
+    // Intentionally NOT @Transactional: this method records the anomaly/notification and then
+    // throws a 429. If the save and the throw shared one transaction, the thrown exception would
+    // roll back the just-saved anomaly. Without an enclosing transaction (the caller is a
+    // controller), each repository save commits in its own transaction before the throw.
     public void enforceExportRateLimit(UUID userId) {
         Instant tenMinutesAgo = Instant.now().minusSeconds(600);
         long count = auditEventRepository.countByUserIdAndEventTypeAndCreatedAtAfter(

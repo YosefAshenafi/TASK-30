@@ -30,8 +30,8 @@ test.describe('Report Schedule CRUD', () => {
       data: {
         reportType: 'ENROLLMENTS',
         cronExpression: '0 0 6 * * ?',
-        format: 'CSV',
-        recipientEmail: 'admin@example.com',
+        outputFormat: 'CSV',
+        outputPath: '/var/reports/enrollments.csv',
       },
     });
 
@@ -53,8 +53,8 @@ test.describe('Report Schedule CRUD', () => {
       data: {
         reportType: 'SEAT_UTILIZATION',
         cronExpression: '0 0 8 * * ?',
-        format: 'PDF',
-        recipientEmail: '',
+        outputFormat: 'PDF',
+        outputPath: '/var/reports/seat-utilization.pdf',
       },
     });
 
@@ -80,8 +80,8 @@ test.describe('Report Schedule CRUD', () => {
       data: {
         reportType: 'REFUNDS',
         cronExpression: '0 0 7 * * ?',
-        format: 'CSV',
-        recipientEmail: '',
+        outputFormat: 'CSV',
+        outputPath: '/var/reports/refunds.csv',
       },
     });
     expect(createRes.status()).toBe(201);
@@ -105,8 +105,8 @@ test.describe('Report Schedule CRUD', () => {
       data: {
         reportType: 'ENROLLMENTS',
         cronExpression: '0 0 6 * * ?',
-        format: 'CSV',
-        recipientEmail: '',
+        outputFormat: 'CSV',
+        outputPath: '/var/reports/enrollments.csv',
       },
     });
 

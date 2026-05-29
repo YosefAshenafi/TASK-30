@@ -13,6 +13,7 @@ import { Router } from '@angular/router';
 import { authInterceptor } from './auth.interceptor';
 import { AuthService, AuthResponse } from './auth.service';
 import { environment } from '../../environments/environment';
+import { of } from 'rxjs';
 
 describe('authInterceptor', () => {
   let http: HttpClient;
@@ -75,7 +76,6 @@ describe('authInterceptor', () => {
 
   it('retries with new token after 401 using refresh', fakeAsync(() => {
     authService.getAccessToken.and.returnValue('expired-token');
-    const { of } = require('rxjs');
     authService.refresh.and.returnValue(of(fakeAuthResponse));
 
     http.get(testUrl).subscribe();

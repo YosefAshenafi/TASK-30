@@ -1,5 +1,6 @@
 package com.meridian.exception;
 
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -8,6 +9,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -47,6 +49,46 @@ public class GlobalExceptionHandler {
                     }
                     return error.getDefaultMessage();
                 })
+                .collect(Collectors.toList());
+
+        ErrorResponse body = new ErrorResponse(
+                "VALIDATION_ERROR",
+                "Request validation failed",
+                Instant.now().toString(),
+                details
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    /**
+     * Method-level constraint violations (e.g. {@code @Size}/{@code @Valid} on controller
+     * parameters of {@code @Validated} beans) surface as {@link ConstraintViolationException}.
+     * Without this handler the catch-all below would turn a client validation error into a 500.
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
+        List<String> details = ex.getConstraintViolations().stream()
+                .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                .collect(Collectors.toList());
+
+        ErrorResponse body = new ErrorResponse(
+                "VALIDATION_ERROR",
+                "Request validation failed",
+                Instant.now().toString(),
+                details
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    /**
+     * Spring 6.1 reports failed validation of individual handler-method arguments (including
+     * elements of a {@code List<@Valid T>} request body) as {@link HandlerMethodValidationException}.
+     * It is mapped to 400 here so it is not swallowed by the generic handler as a 500.
+     */
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorResponse> handleHandlerMethodValidation(HandlerMethodValidationException ex) {
+        List<String> details = ex.getAllErrors().stream()
+                .map(error -> error.getDefaultMessage())
                 .collect(Collectors.toList());
 
         ErrorResponse body = new ErrorResponse(

@@ -32,27 +32,26 @@ test.describe('Analytics', () => {
   test('corporate mentor sees analytics scoped to own org', async ({ page, request }) => {
     const BASE_API = process.env['BASE_URL'] ?? 'http://localhost:3000';
 
-    // Verify via API that corporate mentor gets org-scoped mastery data (200, not cross-tenant data)
-    const ctx = await request.newContext({ baseURL: BASE_API });
-    const loginRes = await ctx.post('/api/auth/login', {
+    // Verify via API that corporate mentor gets org-scoped mastery data (200, not cross-tenant data).
+    // `request` is the Playwright APIRequestContext fixture (its baseURL comes from the config),
+    // so it is used directly — it has no newContext().
+    const loginRes = await request.post('/api/auth/login', {
       data: { username: 'corp1', password: 'Corp@12345678' },
     });
     const loginBody = await loginRes.json();
     const corpToken = loginBody.accessToken as string;
 
     // Request mastery without orgId — server should force ACME org scope
-    const masteryRes = await ctx.get('/api/analytics/mastery', {
+    const masteryRes = await request.get('/api/analytics/mastery', {
       headers: { Authorization: `Bearer ${corpToken}` },
     });
     expect(masteryRes.status()).toBe(200);
 
     // Request mastery with a different orgId — server should still force ACME scope, returns 200
-    const masteryMismatchRes = await ctx.get('/api/analytics/mastery?organizationId=22222222-0000-0000-0000-000000000002', {
+    const masteryMismatchRes = await request.get('/api/analytics/mastery?organizationId=22222222-0000-0000-0000-000000000002', {
       headers: { Authorization: `Bearer ${corpToken}` },
     });
     expect(masteryMismatchRes.status()).toBe(200);
-
-    await ctx.dispose();
 
     // UI: corp mentor can see the analytics page
     await loginAs(page, 'corp1', 'Corp@12345678');
@@ -65,6 +64,9 @@ test.describe('Analytics', () => {
 
     await page.goto('/analytics');
 
+    // The route guard redirects unauthorized roles client-side; wait for it to settle.
+    await page.waitForURL(/\/(dashboard|login)/, { timeout: 8000 }).catch(() => {});
+
     // Student should be redirected away from /analytics
     // Either redirected to /dashboard or shown a 403/unauthorized message
     const url = page.url();
@@ -75,7 +77,7 @@ test.describe('Analytics', () => {
       const body = await page.textContent('body');
       expect(body).toMatch(/access denied|unauthorized|forbidden|403/i);
     } else {
-      expect(isRedirected).toBeTrue();
+      expect(isRedirected).toBe(true);
     }
   });
 });

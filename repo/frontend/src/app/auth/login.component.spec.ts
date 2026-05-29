@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick, flush } from '@angular/core/testing';
 import { ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
@@ -14,7 +14,7 @@ describe('LoginComponent', () => {
   let component: LoginComponent;
   let fixture: ComponentFixture<LoginComponent>;
   let authServiceSpy: jasmine.SpyObj<AuthService>;
-  let routerSpy: jasmine.SpyObj<Router>;
+  let navigateSpy: jasmine.Spy;
 
   const mockAuthResponse: AuthResponse = {
     accessToken: 'test-token-abc',
@@ -40,8 +40,6 @@ describe('LoginComponent', () => {
       'hasRole',
       'getAccessToken',
     ]);
-    routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
-
     await TestBed.configureTestingModule({
       imports: [
         LoginComponent,
@@ -52,13 +50,17 @@ describe('LoginComponent', () => {
       ],
       providers: [
         { provide: AuthService, useValue: authServiceSpy },
-        { provide: Router, useValue: routerSpy },
       ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(LoginComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+
+    // Use the real RouterTestingModule router (so RouterLink/ActivatedRoute work) but stub
+    // navigation: a successful login calls router.navigate(['/dashboard']) and, with no routes
+    // configured, a real navigation rejects with NG04002. Stubbing keeps tests deterministic.
+    navigateSpy = spyOn(TestBed.inject(Router), 'navigate').and.returnValue(Promise.resolve(true));
   });
 
   it('renders login form', () => {
@@ -90,13 +92,12 @@ describe('LoginComponent', () => {
 
   it('navigates to /dashboard on success', fakeAsync(() => {
     authServiceSpy.login.and.returnValue(of(mockAuthResponse));
-    routerSpy.navigate.and.returnValue(Promise.resolve(true));
 
     component.loginForm.setValue({ username: 'admin', password: 'Admin@12345678' });
     component.onSubmit();
     tick();
 
-    expect(routerSpy.navigate).toHaveBeenCalledWith(['/dashboard']);
+    expect(navigateSpy).toHaveBeenCalledWith(['/dashboard']);
   }));
 
   it('shows error message on 401', fakeAsync(() => {
@@ -109,6 +110,9 @@ describe('LoginComponent', () => {
     fixture.detectChanges();
 
     expect(component.errorMessage).toBe('Invalid username or password.');
+
+    // Drain Material-scheduled timers left by the extra change-detection pass.
+    flush();
   }));
 
   it('auth response has nested user contract with id, username, role, organizationId', () => {

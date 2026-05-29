@@ -4,6 +4,7 @@ import com.meridian.entity.Notification;
 import com.meridian.entity.User;
 import com.meridian.service.NotificationService;
 import com.meridian.service.SseNotificationService;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -55,8 +56,13 @@ public class NotificationController {
 
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamNotifications(
-            @AuthenticationPrincipal User principal) {
+            @AuthenticationPrincipal User principal,
+            HttpServletResponse response) {
 
+        // Disable reverse-proxy response buffering so the SSE handshake (status + headers) and
+        // events reach the client immediately. nginx honours X-Accel-Buffering; without it the
+        // stream can stall in the proxy buffer until the connection closes.
+        response.setHeader("X-Accel-Buffering", "no");
         return sseNotificationService.register(principal.getId());
     }
 }

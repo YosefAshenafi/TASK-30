@@ -1,0 +1,14 @@
+-------------------------------------------------------------------------------
+Test set: com.meridian.api.NotificationControllerTest
+-------------------------------------------------------------------------------
+Tests run: 6, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 1803 s <<< FAILURE! -- in com.meridian.api.NotificationControllerTest
+com.meridian.api.NotificationControllerTest.streamNotifications_asAuthenticated_returns200WithSseContentType -- Time elapsed: 1801 s <<< ERROR!
+java.lang.IllegalStateException: Async result for handler [com.meridian.controller.NotificationController#streamNotifications(User)] was not set during the specified timeToWait=1800000
+	at org.springframework.test.web.servlet.DefaultMvcResult.getAsyncResult(DefaultMvcResult.java:146)
+	at org.springframework.test.web.servlet.DefaultMvcResult.getAsyncResult(DefaultMvcResult.java:136)
+	at org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch(MockMvcRequestBuilders.java:271)
+	at com.meridian.api.NotificationControllerTest.streamNotifications_asAuthenticated_returns200WithSseContentType(NotificationControllerTest.java:87)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+

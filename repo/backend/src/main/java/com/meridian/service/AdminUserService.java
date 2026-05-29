@@ -87,7 +87,12 @@ public class AdminUserService {
                 .orElseThrow(() -> AppException.notFound("Role not found: " + roleName));
 
         String oldRole = user.getPrimaryRole();
-        user.setRoles(Set.of(role));
+        // Replace the role set in place. The loaded User is a managed entity whose `roles` is a
+        // Hibernate-managed PersistentSet; assigning an immutable Set.of(...) breaks the merge
+        // path (Hibernate calls clear() on the new collection -> UnsupportedOperationException).
+        // Mutating the existing collection keeps the managed wrapper intact.
+        user.getRoles().clear();
+        user.getRoles().add(role);
         User saved = userRepository.save(user);
         log.info("Role changed: userId={}, oldRole={}, newRole={}", id, oldRole, roleName);
 
@@ -103,6 +108,13 @@ public class AdminUserService {
                 .orElseThrow(() -> AppException.notFound("User not found: " + id));
     }
 
+    private static String stripRolePrefix(String roleName) {
+        if (roleName != null && roleName.startsWith("ROLE_")) {
+            return roleName.substring("ROLE_".length());
+        }
+        return roleName;
+    }
+
     private UserSummaryDto toSummaryDto(User user) {
         Instant deadline = computeBusinessDayDeadline(user.getCreatedAt(), 2);
         boolean overdue = user.getStatus() == UserStatus.PENDING && Instant.now().isAfter(deadline);
@@ -112,11 +124,15 @@ public class AdminUserService {
         String contact = resolveField(user.getId(), "contact_enc", user.getContactEnc(),
                 FieldMaskingUtil::maskEmail);
 
+        // Expose the role without the Spring "ROLE_" authority prefix; admin/user views (and
+        // the frontend) operate on plain role names such as "FACULTY_MENTOR".
+        String role = stripRolePrefix(user.getPrimaryRole());
+
         return new UserSummaryDto(
                 user.getId(),
                 user.getUsername(),
                 user.getStatus(),
-                user.getPrimaryRole(),
+                role,
                 user.getOrganizationId(),
                 deadline,
                 overdue,

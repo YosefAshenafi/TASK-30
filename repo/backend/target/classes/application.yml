@@ -1,5 +1,11 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:3000}
+  ssl:
+    enabled: ${SSL_ENABLED:false}
+    key-store: ${SSL_KEY_STORE:classpath:keystore.p12}
+    key-store-password: ${SSL_KEY_STORE_PASSWORD:changeit}
+    key-store-type: ${SSL_KEY_STORE_TYPE:PKCS12}
+    key-alias: ${SSL_KEY_ALIAS:meridian}
 
 spring:
   datasource:
@@ -28,7 +34,6 @@ spring:
     jdbc:
       initialize-schema: always
     properties:
-      org.quartz.jobStore.driverDelegateClass: org.quartz.impl.jdbcjobstore.PostgreSQLDelegate
       org.quartz.threadPool.threadCount: 5
 
 management:
@@ -58,3 +63,16 @@ meridian:
     batch-size: 500
   rate-limit:
     export-per-10min: 20
+
+---
+# Quartz JDBC delegate is PostgreSQL-specific and only applies to the real (non-test)
+# runtime, which uses the JDBC job store. Tests use the in-memory job store (RAMJobStore),
+# which cannot accept this property — keeping it out of the test profile avoids a
+# NoSuchMethodException on context startup.
+spring:
+  config:
+    activate:
+      on-profile: "!test"
+  quartz:
+    properties:
+      org.quartz.jobStore.driverDelegateClass: org.quartz.impl.jdbcjobstore.PostgreSQLDelegate

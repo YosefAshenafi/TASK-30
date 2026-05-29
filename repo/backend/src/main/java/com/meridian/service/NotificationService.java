@@ -70,8 +70,13 @@ public class NotificationService {
     }
 
     public Notification markRead(UUID notifId, UUID userId) {
-        Notification notification = notificationRepository.findByIdAndUserId(notifId, userId)
-                .orElseThrow(() -> AppException.forbidden("Notification not found or access denied: " + notifId));
+        // A non-existent notification is a 404; an existing notification owned by another
+        // user is a 403. (Looking up by id+user alone cannot distinguish the two.)
+        Notification notification = notificationRepository.findById(notifId)
+                .orElseThrow(() -> AppException.notFound("Notification not found: " + notifId));
+        if (!notification.getUserId().equals(userId)) {
+            throw AppException.forbidden("Access denied to notification: " + notifId);
+        }
 
         if (notification.getReadAt() == null) {
             notification.setReadAt(Instant.now());

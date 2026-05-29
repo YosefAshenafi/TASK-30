@@ -21,6 +21,8 @@ describe('AuthService', () => {
   };
 
   beforeEach(() => {
+    // AuthService restores a persisted session in its constructor; start each test clean.
+    localStorage.clear();
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule, RouterTestingModule],
       providers: [AuthService],
@@ -44,7 +46,8 @@ describe('AuthService', () => {
     tick();
 
     expect(service.getUserId()).toBe('user-uuid-001');
-    expect(service.getRole()).toBe('ROLE_ADMINISTRATOR');
+    // The service strips the Spring ROLE_ prefix so client role checks use plain names.
+    expect(service.getRole()).toBe('ADMINISTRATOR');
     expect(service.isAuthenticated()).toBeTrue();
   }));
 
@@ -85,7 +88,7 @@ describe('AuthService', () => {
     req.flush(nestedAuthResponse);
     tick();
 
-    expect(service.hasRole('ROLE_ADMINISTRATOR')).toBeTrue();
-    expect(service.hasRole('ROLE_STUDENT')).toBeFalse();
+    expect(service.hasRole('ADMINISTRATOR')).toBeTrue();
+    expect(service.hasRole('STUDENT')).toBeFalse();
   }));
 });

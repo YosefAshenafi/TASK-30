@@ -1,5 +1,6 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick, flush } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, throwError } from 'rxjs';
 import { UserManagementComponent } from './user-management.component';
@@ -10,18 +11,18 @@ describe('UserManagementComponent', () => {
   let snackBar: jasmine.SpyObj<MatSnackBar>;
 
   const pendingUsers = [
-    { userId: 'u1', username: 'bob', createdAt: '2025-01-01T00:00:00Z', requestedRole: 'STUDENT' },
+    { id: 'u1', username: 'bob', createdAt: '2025-01-01T00:00:00Z', requestedRole: 'STUDENT' },
   ];
   const allUsers = [
-    { userId: 'u2', username: 'alice', role: 'STUDENT', status: 'ACTIVE', createdAt: '2025-01-01T00:00:00Z' },
-    { userId: 'u3', username: 'carol', role: 'ADMINISTRATOR', status: 'ACTIVE', createdAt: '2025-01-02T00:00:00Z' },
+    { id: 'u2', username: 'alice', role: 'STUDENT', status: 'ACTIVE', createdAt: '2025-01-01T00:00:00Z' },
+    { id: 'u3', username: 'carol', role: 'ADMINISTRATOR', status: 'ACTIVE', createdAt: '2025-01-02T00:00:00Z' },
   ];
 
   beforeEach(() => {
-    apiService = jasmine.createSpyObj('ApiService', ['get', 'post', 'patch']);
+    apiService = jasmine.createSpyObj('ApiService', ['get', 'post', 'put', 'patch']);
     snackBar = jasmine.createSpyObj('MatSnackBar', ['open']);
 
-    apiService.get.and.callFake((url: string) => {
+    apiService.get.and.callFake((url: string): any => {
       if (url === '/admin/users/pending') return of(pendingUsers);
       if (url === '/admin/users') return of(allUsers);
       return of([]);
@@ -32,9 +33,14 @@ describe('UserManagementComponent', () => {
       providers: [
         { provide: ApiService, useValue: apiService },
         { provide: MatSnackBar, useValue: snackBar },
+        provideNoopAnimations(),
       ],
       schemas: [NO_ERRORS_SCHEMA],
     });
+
+    // MatSnackBar is providedIn 'root'; for this standalone component the module-level provider
+    // above is shadowed by the component injector, so force the mock everywhere it is requested.
+    TestBed.overrideProvider(MatSnackBar, { useValue: snackBar });
   });
 
   it('should be created', () => {
@@ -52,46 +58,46 @@ describe('UserManagementComponent', () => {
   }));
 
   it('approveUser() POSTs to approve endpoint and removes user from pending list', fakeAsync(() => {
-    apiService.post.and.returnValue(of({}));
+    apiService.put.and.returnValue(of({}));
     const fixture = TestBed.createComponent(UserManagementComponent);
     fixture.detectChanges();
     tick();
 
     const comp = fixture.componentInstance;
     comp.approveUser(pendingUsers[0]);
-    tick();
+    flush();
 
-    expect(apiService.post).toHaveBeenCalledWith('/admin/users/u1/approve', {});
-    expect(comp.pendingUsers.find((u) => u.userId === 'u1')).toBeUndefined();
+    expect(apiService.put).toHaveBeenCalledWith('/admin/users/u1/approve', {});
+    expect(comp.pendingUsers.find((u) => u.id === 'u1')).toBeUndefined();
     expect(comp.processingUserId).toBeNull();
     expect(snackBar.open).toHaveBeenCalledWith('bob approved.', 'Dismiss', jasmine.any(Object));
   }));
 
   it('approveUser() shows error snack on failure', fakeAsync(() => {
-    apiService.post.and.returnValue(throwError(() => new Error('fail')));
+    apiService.put.and.returnValue(throwError(() => new Error('fail')));
     const fixture = TestBed.createComponent(UserManagementComponent);
     fixture.detectChanges();
     tick();
 
     fixture.componentInstance.approveUser(pendingUsers[0]);
-    tick();
+    flush();
 
     expect(snackBar.open).toHaveBeenCalledWith('Failed to approve user.', 'Dismiss', jasmine.any(Object));
     expect(fixture.componentInstance.processingUserId).toBeNull();
   }));
 
   it('rejectUser() POSTs to reject endpoint and removes user from pending list', fakeAsync(() => {
-    apiService.post.and.returnValue(of({}));
+    apiService.put.and.returnValue(of({}));
     const fixture = TestBed.createComponent(UserManagementComponent);
     fixture.detectChanges();
     tick();
 
     const comp = fixture.componentInstance;
     comp.rejectUser(pendingUsers[0]);
-    tick();
+    flush();
 
-    expect(apiService.post).toHaveBeenCalledWith('/admin/users/u1/reject', {});
-    expect(comp.pendingUsers.find((u) => u.userId === 'u1')).toBeUndefined();
+    expect(apiService.put).toHaveBeenCalledWith('/admin/users/u1/reject', {});
+    expect(comp.pendingUsers.find((u) => u.id === 'u1')).toBeUndefined();
     expect(snackBar.open).toHaveBeenCalledWith('bob rejected.', 'Dismiss', jasmine.any(Object));
   }));
 
@@ -103,9 +109,9 @@ describe('UserManagementComponent', () => {
 
     const user = fixture.componentInstance.users[0];
     fixture.componentInstance.changeRole(user, 'FACULTY_MENTOR');
-    tick();
+    flush();
 
-    expect(apiService.patch).toHaveBeenCalledWith('/admin/users/u2/role', { role: 'FACULTY_MENTOR' });
+    expect(apiService.patch).toHaveBeenCalledWith('/admin/users/u2/role', { roleName: 'FACULTY_MENTOR' });
     expect(user.role).toBe('FACULTY_MENTOR');
     expect(snackBar.open).toHaveBeenCalledWith(
       'Role updated to FACULTY_MENTOR.',
@@ -121,7 +127,7 @@ describe('UserManagementComponent', () => {
     tick();
 
     fixture.componentInstance.changeRole(allUsers[0], 'CORPORATE_MENTOR');
-    tick();
+    flush();
 
     expect(snackBar.open).toHaveBeenCalledWith('Failed to update role.', 'Dismiss', jasmine.any(Object));
   }));
@@ -141,7 +147,7 @@ describe('UserManagementComponent', () => {
   }));
 
   it('sets errorMessage when pending users load fails', fakeAsync(() => {
-    apiService.get.and.callFake((url: string) => {
+    apiService.get.and.callFake((url: string): any => {
       if (url === '/admin/users/pending') return throwError(() => new Error('fail'));
       return of([]);
     });

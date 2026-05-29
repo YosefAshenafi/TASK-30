@@ -1,25 +1,25 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { RegisterComponent } from './register.component';
 import { AuthService } from '../core/auth.service';
 
 describe('RegisterComponent', () => {
   let authService: jasmine.SpyObj<AuthService>;
-  let router: jasmine.SpyObj<Router>;
 
   beforeEach(() => {
     authService = jasmine.createSpyObj('AuthService', ['register']);
-    router = jasmine.createSpyObj('Router', ['navigate']);
 
     TestBed.configureTestingModule({
       imports: [RegisterComponent, ReactiveFormsModule],
       providers: [
         { provide: AuthService, useValue: authService },
-        { provide: Router, useValue: router },
+        provideRouter([]),
+        provideNoopAnimations(),
       ],
       schemas: [NO_ERRORS_SCHEMA],
     });

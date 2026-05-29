@@ -47,6 +47,10 @@ public class JwtService {
         long now = System.currentTimeMillis();
         return Jwts.builder()
                 .subject(userId.toString())
+                // Unique token id so two refresh tokens issued for the same user within the
+                // same second are never byte-identical (their SHA-256 hashes are persisted
+                // under a UNIQUE constraint; identical tokens would collide and 500).
+                .id(UUID.randomUUID().toString())
                 .claims(Map.of("type", "REFRESH"))
                 .issuedAt(new Date(now))
                 .expiration(new Date(now + jwtProperties.refreshExpiryMs()))

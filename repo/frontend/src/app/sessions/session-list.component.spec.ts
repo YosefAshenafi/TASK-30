@@ -1,5 +1,7 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { SessionListComponent, SessionSummary } from './session-list.component';
 import { ApiService } from '../core/api.service';
@@ -30,7 +32,11 @@ describe('SessionListComponent', () => {
 
     TestBed.configureTestingModule({
       imports: [SessionListComponent],
-      providers: [{ provide: ApiService, useValue: apiService }],
+      providers: [
+        { provide: ApiService, useValue: apiService },
+        provideNoopAnimations(),
+        provideRouter([]),
+      ],
       schemas: [NO_ERRORS_SCHEMA],
     });
   });

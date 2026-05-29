@@ -6,13 +6,13 @@ import { routes } from './app.routes';
 import { authInterceptor } from './core/auth.interceptor';
 import { AuthService } from './core/auth.service';
 
-function initializeAuth(authService: AuthService): () => Promise<void> {
-  return () =>
-    new Promise<void>((resolve) => {
-      authService
-        .refresh()
-        .subscribe({ next: () => resolve(), error: () => resolve() });
-    });
+function initializeAuth(_authService: AuthService): () => Promise<void> {
+  // Injecting AuthService here ensures its constructor runs at bootstrap, restoring any persisted
+  // session from localStorage. We intentionally do NOT attempt a cookie-based refresh on startup:
+  // when the refresh cookie is unavailable it 401s, and refresh() then clears the session and
+  // redirects to /login — which would log out a returning user on reload and break public pages
+  // such as /register. Token renewal is handled lazily by the HTTP interceptor on a 401.
+  return () => Promise.resolve();
 }
 
 export const appConfig: ApplicationConfig = {

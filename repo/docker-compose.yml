@@ -63,19 +63,64 @@ services:
       retries: 12
       start_period: 20s
 
+  # Backend test runner (profile: test). The runtime `backend` image is a slim JRE without
+  # Maven, so unit/API tests run from the Maven `build` stage instead. The tests use
+  # Testcontainers to start their own PostgreSQL via the host Docker daemon, so the socket is
+  # mounted; TESTCONTAINERS_HOST_OVERRIDE rewrites the spawned container's JDBC URL to
+  # host.docker.internal so it is reachable from inside this container (host-gateway maps it on
+  # plain Linux too). No dependency on the `db` service — Testcontainers manages its own DB.
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: build
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+    command: ["mvn", "test"]
+    profiles:
+      - test
+
+  # Frontend test runner (profile: test). The runtime `frontend` image is Nginx (no Node or
+  # browser), so Karma/Jasmine unit tests run from the dedicated `test` build stage, which adds
+  # headless Chromium on top of the build stage (sources + installed node_modules).
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: test
+    command: ["npm", "test"]
+    profiles:
+      - test
+
   playwright:
     image: mcr.microsoft.com/playwright:v1.40.0-focal
     working_dir: /tests
     volumes:
       - ./tests:/tests
-      - ./frontend/package.json:/tests/package.json
+      # Anonymous volume so `npm install` writes node_modules inside the container and does not
+      # pollute the host ./tests directory (the bind mount above would otherwise receive it).
+      - /tests/node_modules
     depends_on:
       - frontend
       - backend
     environment:
       BASE_URL: http://frontend:3000
+      # CI=1 makes npm/npx/Playwright fully non-interactive (no "Ok to proceed?" prompts),
+      # so the suite runs unattended on a server/CI.
+      CI: "1"
+    # @playwright/test is pinned to 1.40.0 in tests/package.json to match the browsers bundled
+    # in this image. The Playwright config lives in tests/e2e/; its testDir resolves relative to
+    # the config file, so the specs in tests/e2e/ are picked up.
+    # `npx --yes` auto-confirms any package-install prompt so nothing blocks waiting for input.
     command: >
-      bash -c "npm install && npx playwright install && npx playwright test"
+      bash -lc "npm install --no-audit --no-fund --no-progress --silent &&
+                npx --yes playwright install chromium &&
+                npx --yes playwright test --config=e2e/playwright.config.ts --reporter=line"
     profiles:
       - e2e
 

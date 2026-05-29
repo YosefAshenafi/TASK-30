@@ -32,6 +32,15 @@ public class SseNotificationService {
         });
         emitter.onError(e -> removeEmitter(userId, emitter));
 
+        // Send an initial comment so the response headers (200 + text/event-stream) are flushed
+        // to the client and any reverse proxy immediately on connect, rather than blocking until
+        // the first real notification arrives.
+        try {
+            emitter.send(SseEmitter.event().comment("connected"));
+        } catch (IOException e) {
+            removeEmitter(userId, emitter);
+        }
+
         log.debug("Registered SSE emitter for user {}", userId);
         return emitter;
     }

@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { ErrorDisplayComponent } from './error-display.component';
 
 @Component({
@@ -15,6 +16,7 @@ describe('ErrorDisplayComponent', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [HostComponent, ErrorDisplayComponent],
+      providers: [provideNoopAnimations()],
     });
   });
 

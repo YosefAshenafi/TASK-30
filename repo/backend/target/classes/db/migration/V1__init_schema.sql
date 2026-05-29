@@ -20,7 +20,7 @@ CREATE TABLE users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username        VARCHAR(100) NOT NULL UNIQUE,
     password_hash   VARCHAR(255) NOT NULL,
-    status          user_status NOT NULL DEFAULT 'PENDING',
+    status          VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     organization_id UUID REFERENCES organizations(id),
     failed_attempts INT NOT NULL DEFAULT 0,
     locked_until    TIMESTAMPTZ,
@@ -103,13 +103,13 @@ CREATE TABLE training_sessions (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID NOT NULL REFERENCES users(id),
     course_id       UUID NOT NULL REFERENCES courses(id),
-    status          session_status NOT NULL DEFAULT 'IN_PROGRESS',
+    status          VARCHAR(20) NOT NULL DEFAULT 'IN_PROGRESS',
     rest_timer_secs INT NOT NULL DEFAULT 60,
     started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     completed_at    TIMESTAMPTZ,
     idempotency_key VARCHAR(255) UNIQUE,
     course_version  VARCHAR(50),
-    sync_status     sync_status NOT NULL DEFAULT 'SYNCED',
+    sync_status     VARCHAR(20) NOT NULL DEFAULT 'SYNCED',
     deleted_at      TIMESTAMPTZ
 );
 CREATE INDEX idx_ts_user   ON training_sessions(user_id);
@@ -175,7 +175,7 @@ CREATE TYPE notif_type AS ENUM ('APPROVAL_REQUEST','ACCOUNT_STATUS','EXPORT_COMP
 CREATE TABLE notifications (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID NOT NULL REFERENCES users(id),
-    type       notif_type NOT NULL,
+    type       VARCHAR(30) NOT NULL,
     subject    VARCHAR(255) NOT NULL,
     body       TEXT NOT NULL,
     read_at    TIMESTAMPTZ,
@@ -192,9 +192,9 @@ CREATE TABLE report_schedules (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID NOT NULL REFERENCES users(id),
     organization_id UUID REFERENCES organizations(id),
-    report_type     report_type NOT NULL,
+    report_type     VARCHAR(30) NOT NULL,
     cron_expression VARCHAR(100) NOT NULL,
-    output_format   report_format NOT NULL DEFAULT 'CSV',
+    output_format   VARCHAR(10) NOT NULL DEFAULT 'CSV',
     output_path     VARCHAR(500) NOT NULL,
     last_run_at     TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -207,7 +207,7 @@ CREATE TABLE data_permissions (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     field_name     VARCHAR(100) NOT NULL,
-    classification classification NOT NULL,
+    classification VARCHAR(20) NOT NULL,
     granted_by     UUID REFERENCES users(id),
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(user_id, field_name)
@@ -223,10 +223,10 @@ CREATE TYPE audit_event_type AS ENUM (
 CREATE TABLE audit_events (
     id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id            UUID REFERENCES users(id),
-    event_type         audit_event_type NOT NULL,
+    event_type         VARCHAR(40) NOT NULL,
     entity_type        VARCHAR(100),
     entity_id          VARCHAR(255),
-    details            JSONB,
+    details            TEXT,
     ip_address         VARCHAR(45),
     device_fingerprint VARCHAR(255),
     created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -250,7 +250,7 @@ CREATE TABLE anomalies (
     id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id            UUID REFERENCES users(id),
     type               VARCHAR(100) NOT NULL,
-    details            JSONB,
+    details            TEXT,
     ip_address         VARCHAR(45),
     device_fingerprint VARCHAR(255),
     created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -265,7 +265,7 @@ CREATE TABLE approvals (
     requester_id UUID NOT NULL REFERENCES users(id),
     approver_id  UUID REFERENCES users(id),
     type         VARCHAR(100) NOT NULL,
-    status       approval_status NOT NULL DEFAULT 'PENDING',
+    status       VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     entity_type  VARCHAR(100),
     entity_id    VARCHAR(255),
     notes        TEXT,
@@ -290,7 +290,7 @@ CREATE TABLE recycle_bin (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     entity_type   VARCHAR(100) NOT NULL,
     entity_id     UUID NOT NULL,
-    original_data JSONB NOT NULL,
+    original_data TEXT NOT NULL,
     deleted_by    UUID REFERENCES users(id),
     deleted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at    TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '14 days'

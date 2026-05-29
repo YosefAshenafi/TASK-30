@@ -1,5 +1,7 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { DashboardComponent } from './dashboard.component';
 import { AuthService } from '../core/auth.service';
@@ -25,6 +27,8 @@ describe('DashboardComponent', () => {
       providers: [
         { provide: AuthService, useValue: authService },
         { provide: ApiService, useValue: apiService },
+        provideNoopAnimations(),
+        provideRouter([]),
       ],
       schemas: [NO_ERRORS_SCHEMA],
     });

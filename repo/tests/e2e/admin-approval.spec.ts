@@ -71,26 +71,26 @@ test.describe('Admin User Management', () => {
     const adminToken = await apiLogin('admin', 'Admin@12345678');
     const ctx = await request.newContext({ baseURL: BASE_API });
 
-    // List users to find one that is APPROVED (to reject back to REJECTED)
-    const listRes = await ctx.get('/api/admin/users', {
+    // Register a fresh, dedicated user to reject so we never mutate shared seed users that
+    // other tests log in as (which would make this suite order-dependent and flaky).
+    const username = `e2e_reject_${Date.now()}`;
+    const regRes = await ctx.post('/api/auth/register', {
+      data: { username, password: 'E2eReject@12345678' },
+    });
+    expect([200, 201]).toContain(regRes.status());
+
+    // Look the new (pending) user up by username to get its id.
+    const pendingRes = await ctx.get('/api/admin/users/pending', {
       headers: { Authorization: `Bearer ${adminToken}` },
     });
-    expect(listRes.status()).toBe(200);
-    const users = await listRes.json();
+    const pending = await pendingRes.json();
+    const target = (Array.isArray(pending) ? pending : []).find((u: any) => u.username === username);
+    expect(target).toBeTruthy();
 
-    // Find a non-admin active user to attempt reject on
-    const candidates = Array.isArray(users)
-      ? users.filter((u: any) => u.role !== 'ROLE_ADMINISTRATOR')
-      : users.content?.filter((u: any) => u.role !== 'ROLE_ADMINISTRATOR') ?? [];
-
-    if (candidates.length > 0) {
-      const userId = candidates[0].userId;
-      const rejectRes = await ctx.post(`/api/admin/users/${userId}/reject`, {
-        headers: { Authorization: `Bearer ${adminToken}` },
-      });
-      // 200 on success, 409 if already rejected — either is a valid authorized response
-      expect([200, 409]).toContain(rejectRes.status());
-    }
+    const rejectRes = await ctx.put(`/api/admin/users/${target.id}/reject`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect([200, 409]).toContain(rejectRes.status());
 
     await ctx.dispose();
   });
@@ -106,9 +106,9 @@ test.describe('Admin User Management', () => {
     });
     const users = await listRes.json();
     const candidates = Array.isArray(users) ? users : users.content ?? [];
-    const userId = candidates.length > 0 ? candidates[0].userId : '00000000-0000-0000-0000-000000000001';
+    const userId = candidates.length > 0 ? candidates[0].id : '00000000-0000-0000-0000-000000000001';
 
-    const rejectRes = await ctx.post(`/api/admin/users/${userId}/reject`, {
+    const rejectRes = await ctx.put(`/api/admin/users/${userId}/reject`, {
       headers: { Authorization: `Bearer ${studentToken}` },
     });
     expect(rejectRes.status()).toBe(403);
@@ -145,29 +145,28 @@ test.describe('Admin Role Change', () => {
     const adminToken = await apiLogin('admin', 'Admin@12345678');
     const ctx = await request.newContext({ baseURL: BASE_API });
 
-    // Get users list
-    const listRes = await ctx.get('/api/admin/users', {
+    // Register a fresh, dedicated user to role-change so shared seed users keep their roles
+    // (other tests depend on faculty1/corp1/student1 having their seeded roles).
+    const username = `e2e_role_${Date.now()}`;
+    const regRes = await ctx.post('/api/auth/register', {
+      data: { username, password: 'E2eRole@12345678' },
+    });
+    expect([200, 201]).toContain(regRes.status());
+
+    const pendingRes = await ctx.get('/api/admin/users/pending', {
       headers: { Authorization: `Bearer ${adminToken}` },
     });
-    expect(listRes.status()).toBe(200);
-    const users = await listRes.json();
-    const candidates = Array.isArray(users)
-      ? users.filter((u: any) => u.role !== 'ROLE_ADMINISTRATOR')
-      : (users.content ?? []).filter((u: any) => u.role !== 'ROLE_ADMINISTRATOR');
+    const pending = await pendingRes.json();
+    const target = (Array.isArray(pending) ? pending : []).find((u: any) => u.username === username);
+    expect(target).toBeTruthy();
 
-    if (candidates.length > 0) {
-      const userId = candidates[0].userId;
-      const currentRole = candidates[0].role?.replace('ROLE_', '') ?? 'STUDENT';
-      const newRole = currentRole === 'STUDENT' ? 'FACULTY_MENTOR' : 'STUDENT';
-
-      const roleRes = await ctx.patch(`/api/admin/users/${userId}/role`, {
-        headers: { Authorization: `Bearer ${adminToken}` },
-        data: { roleName: `ROLE_${newRole}` },
-      });
-      expect(roleRes.status()).toBe(200);
-      const updated = await roleRes.json();
-      expect(updated.role).toMatch(new RegExp(newRole, 'i'));
-    }
+    const roleRes = await ctx.patch(`/api/admin/users/${target.id}/role`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+      data: { roleName: 'ROLE_FACULTY_MENTOR' },
+    });
+    expect(roleRes.status()).toBe(200);
+    const updated = await roleRes.json();
+    expect(updated.role).toMatch(/FACULTY_MENTOR/i);
 
     await ctx.dispose();
   });
@@ -182,7 +181,7 @@ test.describe('Admin Role Change', () => {
     });
     const users = await listRes.json();
     const candidates = Array.isArray(users) ? users : users.content ?? [];
-    const userId = candidates.length > 0 ? candidates[0].userId : '00000000-0000-0000-0000-000000000001';
+    const userId = candidates.length > 0 ? candidates[0].id : '00000000-0000-0000-0000-000000000001';
 
     const roleRes = await ctx.patch(`/api/admin/users/${userId}/role`, {
       headers: { Authorization: `Bearer ${facultyToken}` },
@@ -210,8 +209,9 @@ test.describe('Admin Role Change', () => {
     const userTable = page.locator('table[mat-table]').last();
     await expect(userTable).toBeVisible({ timeout: 8000 });
 
-    // Role selects should be present in the table
+    // Role selects render per row once the All Users data has loaded — wait for at least one.
     const roleSelects = page.locator('mat-select.role-select');
+    await expect(roleSelects.first()).toBeVisible({ timeout: 8000 });
     const count = await roleSelects.count();
     expect(count).toBeGreaterThanOrEqual(1);
   });

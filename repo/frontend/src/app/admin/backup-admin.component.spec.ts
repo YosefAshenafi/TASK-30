@@ -1,7 +1,8 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick, flush } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of, throwError } from 'rxjs';
 import { BackupAdminComponent } from './backup-admin.component';
 import { ApiService } from '../core/api.service';
@@ -35,7 +36,7 @@ describe('BackupAdminComponent', () => {
     apiService = jasmine.createSpyObj('ApiService', ['get', 'post', 'delete']);
     snackBar = jasmine.createSpyObj('MatSnackBar', ['open']);
 
-    apiService.get.and.callFake((url: string) => {
+    apiService.get.and.callFake((url: string): any => {
       if (url === '/admin/backup/history') return of(backupHistory);
       if (url === '/admin/recycle-bin') return of(recycleBin);
       return of([]);
@@ -46,9 +47,13 @@ describe('BackupAdminComponent', () => {
       providers: [
         { provide: ApiService, useValue: apiService },
         { provide: MatSnackBar, useValue: snackBar },
+        provideNoopAnimations(),
       ],
       schemas: [NO_ERRORS_SCHEMA],
     });
+
+    // Force the MatSnackBar mock (providedIn 'root' is otherwise shadowed by the component injector).
+    TestBed.overrideProvider(MatSnackBar, { useValue: snackBar });
   });
 
   it('should be created', () => {
@@ -76,7 +81,7 @@ describe('BackupAdminComponent', () => {
     const comp = fixture.componentInstance;
     comp.backupForm.get('backupType')!.setValue('INCREMENTAL');
     comp.triggerBackup();
-    tick();
+    flush();
 
     expect(apiService.post).toHaveBeenCalledWith('/admin/backup/trigger', { type: 'INCREMENTAL' });
     expect(comp.backupHistory[0]).toEqual(newBackup);
@@ -95,7 +100,7 @@ describe('BackupAdminComponent', () => {
     tick();
 
     fixture.componentInstance.triggerBackup();
-    tick();
+    flush();
 
     expect(snackBar.open).toHaveBeenCalledWith('Failed to trigger backup.', 'Dismiss', jasmine.any(Object));
     expect(fixture.componentInstance.triggeringBackup).toBeFalse();
@@ -109,7 +114,7 @@ describe('BackupAdminComponent', () => {
 
     const comp = fixture.componentInstance;
     comp.restoreEntity(recycleBin[0]);
-    tick();
+    flush();
 
     expect(apiService.post).toHaveBeenCalledWith('/admin/recycle-bin/r1/restore', {});
     expect(comp.recycleBin.find((r) => r.recycleId === 'r1')).toBeUndefined();
@@ -125,7 +130,7 @@ describe('BackupAdminComponent', () => {
 
     const comp = fixture.componentInstance;
     comp.purgeEntity(recycleBin[0]);
-    tick();
+    flush();
 
     expect(apiService.delete).toHaveBeenCalledWith('/admin/recycle-bin/r1');
     expect(comp.recycleBin.find((r) => r.recycleId === 'r1')).toBeUndefined();
@@ -141,10 +146,10 @@ describe('BackupAdminComponent', () => {
     expect(comp.formatBytes(2048)).toBe('2.0 KB');
     expect(comp.formatBytes(1048576)).toBe('1.0 MB');
     expect(comp.formatBytes(1073741824)).toBe('1.00 GB');
-  }));
+  });
 
   it('sets errorMessage when backup history load fails', fakeAsync(() => {
-    apiService.get.and.callFake((url: string) => {
+    apiService.get.and.callFake((url: string): any => {
       if (url === '/admin/backup/history') return throwError(() => new Error('fail'));
       return of([]);
     });

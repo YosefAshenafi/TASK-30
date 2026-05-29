@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { LoadingSpinnerComponent } from './loading-spinner.component';
 
 describe('LoadingSpinnerComponent', () => {
@@ -7,6 +8,7 @@ describe('LoadingSpinnerComponent', () => {
     TestBed.configureTestingModule({
       imports: [LoadingSpinnerComponent],
       schemas: [NO_ERRORS_SCHEMA],
+      providers: [provideNoopAnimations()],
     });
   });
 

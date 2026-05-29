@@ -53,20 +53,23 @@ test.describe('Notifications', () => {
 
   test('authenticated user can connect to SSE stream', async () => {
     const token = await apiLogin('admin', 'Admin@12345678');
-    const ctx = await request.newContext({ baseURL: BASE_API });
 
-    const res = await ctx.get('/api/notifications/stream', {
+    // The SSE response stays open indefinitely, so Playwright's request.get (which buffers the
+    // full body) would hang. Use fetch, which resolves as soon as the response headers arrive;
+    // assert the handshake (200 + text/event-stream), then abort the still-open stream.
+    const controller = new AbortController();
+    const res = await fetch(`${BASE_API}/api/notifications/stream`, {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'text/event-stream',
       },
+      signal: controller.signal,
     });
 
-    expect(res.status()).toBe(200);
-    const contentType = res.headers()['content-type'] ?? '';
-    expect(contentType).toContain('text/event-stream');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type') ?? '').toContain('text/event-stream');
 
-    await ctx.dispose();
+    controller.abort();
   });
 
   test('unauthenticated request to SSE stream returns 401', async () => {

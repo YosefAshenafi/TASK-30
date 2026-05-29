@@ -3,10 +3,23 @@
 # ---- Build stage: compile the Angular application ----
 FROM node:20-alpine AS build
 WORKDIR /app
+# Disable Angular CLI usage-analytics so `ng build`/`ng test` never show the interactive
+# "share pseudonymous usage data? (y/N)" prompt — it would block an unattended CI/server run.
+# Inherited by the `test` stage below (FROM build).
+ENV NG_CLI_ANALYTICS=false
 COPY package.json ./
 RUN npm install
 COPY . .
 RUN npm run build
+
+# ---- Test stage: run Karma/Jasmine unit tests headlessly with Chromium ----
+# Reuses the build stage (sources + installed node_modules) and adds the Chromium
+# browser the headless Karma launcher needs. Selected via `--target test` by the
+# `frontend-test` compose service / run_tests.sh; the runtime image below stays slim.
+FROM build AS test
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont
+ENV CHROME_BIN=/usr/bin/chromium-browser
+CMD ["npm", "test"]
 
 # ---- Runtime stage: serve the compiled assets with Nginx ----
 FROM nginx:1.27-alpine

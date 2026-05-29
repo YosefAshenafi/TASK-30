@@ -1,4 +1,4 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { SyncService, SyncResult } from './sync.service';
 import { db, DraftAssessment, LocalSession } from './db.service';
@@ -42,7 +42,7 @@ describe('SyncService', () => {
     expect(result.rejectedKeys).toEqual(['key-abc']);
   });
 
-  it('sync request sends raw array (not wrapped object) with required fields', fakeAsync(async () => {
+  it('sync request sends raw array (not wrapped object) with required fields', async () => {
     const pendingSession: LocalSession = {
       idempotencyKey: 'test-key-001',
       courseId: 'course-uuid-001',
@@ -61,7 +61,7 @@ describe('SyncService', () => {
 
     // Trigger online event to start sync
     window.dispatchEvent(new Event('online'));
-    tick(100);
+    await new Promise((r) => setTimeout(r, 100));
 
     const req = httpMock.expectOne(SYNC_URL);
 
@@ -79,16 +79,16 @@ describe('SyncService', () => {
     expect('clientUpdatedAt' in payload).toBeTrue();
 
     req.flush(syncResult);
-    tick(100);
+    await new Promise((r) => setTimeout(r, 100));
 
     // Session should be marked SYNCED when not in rejectedKeys
     const updated = await db.sessions.get('test-key-001');
     expect(updated?.syncStatus).toBe('SYNCED');
 
     await db.sessions.delete('test-key-001');
-  }));
+  });
 
-  it('marks session CONFLICT when idempotencyKey appears in rejectedKeys', fakeAsync(async () => {
+  it('marks session CONFLICT when idempotencyKey appears in rejectedKeys', async () => {
     const pendingSession: LocalSession = {
       idempotencyKey: 'conflict-key-002',
       courseId: 'course-uuid-001',
@@ -111,23 +111,23 @@ describe('SyncService', () => {
     };
 
     window.dispatchEvent(new Event('online'));
-    tick(100);
+    await new Promise((r) => setTimeout(r, 100));
 
     const req = httpMock.expectOne(SYNC_URL);
     req.flush(syncResult);
-    tick(100);
+    await new Promise((r) => setTimeout(r, 100));
 
     const updated = await db.sessions.get('conflict-key-002');
     expect(updated?.syncStatus).toBe('CONFLICT');
 
     await db.sessions.delete('conflict-key-002');
-  }));
+  });
 
   it('isOffline reflects navigator.onLine', () => {
     expect(service.isOffline()).toBe(!navigator.onLine);
   });
 
-  it('syncPendingDraftAssessments sends draft payload to correct URL', fakeAsync(async () => {
+  it('syncPendingDraftAssessments sends draft payload to correct URL', async () => {
     const draft: DraftAssessment = {
       sessionId: 'session-uuid-001',
       itemId: 'item-uuid-001',
@@ -142,7 +142,7 @@ describe('SyncService', () => {
     await db.draftAssessments.add(draft);
 
     service.syncPendingDraftAssessments();
-    tick(100);
+    await new Promise((r) => setTimeout(r, 100));
 
     const req = httpMock.expectOne(
       `${environment.apiUrl}/api/sessions/draft-assessments/sync`
@@ -160,7 +160,7 @@ describe('SyncService', () => {
 
     const syncResult: SyncResult = { accepted: 1, rejected: 0, duplicates: 0, rejectedKeys: [] };
     req.flush(syncResult);
-    tick(100);
+    await new Promise((r) => setTimeout(r, 100));
 
     const remaining = await db.draftAssessments
       .where('idempotencyKey')
@@ -170,14 +170,14 @@ describe('SyncService', () => {
     if (remaining.length > 0 && remaining[0].id !== undefined) {
       await db.draftAssessments.delete(remaining[0].id);
     }
-  }));
+  });
 
-  it('syncPendingDraftAssessments skips empty queue without HTTP call', fakeAsync(async () => {
+  it('syncPendingDraftAssessments skips empty queue without HTTP call', async () => {
     await db.draftAssessments.clear();
 
     service.syncPendingDraftAssessments();
-    tick(100);
+    await new Promise((r) => setTimeout(r, 100));
 
     httpMock.expectNone(`${environment.apiUrl}/api/sessions/draft-assessments/sync`);
-  }));
+  });
 });

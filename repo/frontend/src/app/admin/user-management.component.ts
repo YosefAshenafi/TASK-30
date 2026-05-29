@@ -19,14 +19,14 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { ApiService } from '../core/api.service';
 
 interface PendingUser {
-  userId: string;
+  id: string;
   username: string;
   createdAt: string;
   requestedRole: string;
 }
 
 interface UserRecord {
-  userId: string;
+  id: string;
   username: string;
   role: string;
   status: string;
@@ -91,10 +91,10 @@ const ROLES = ['STUDENT', 'FACULTY_MENTOR', 'CORPORATE_MENTOR', 'ADMINISTRATOR']
                       mat-raised-button
                       color="primary"
                       (click)="approveUser(r)"
-                      [disabled]="processingUserId === r.userId"
+                      [disabled]="processingUserId === r.id"
                       class="action-btn"
                     >
-                      <mat-spinner diameter="16" *ngIf="processingUserId === r.userId"></mat-spinner>
+                      <mat-spinner diameter="16" *ngIf="processingUserId === r.id"></mat-spinner>
                       <mat-icon *ngIf="processingUserId !== r.userId">check</mat-icon>
                       Approve
                     </button>
@@ -102,7 +102,7 @@ const ROLES = ['STUDENT', 'FACULTY_MENTOR', 'CORPORATE_MENTOR', 'ADMINISTRATOR']
                       mat-stroked-button
                       color="warn"
                       (click)="rejectUser(r)"
-                      [disabled]="processingUserId === r.userId"
+                      [disabled]="processingUserId === r.id"
                     >
                       <mat-icon>close</mat-icon>
                       Reject
@@ -224,12 +224,12 @@ export class UserManagementComponent implements OnInit {
   }
 
   approveUser(user: PendingUser): void {
-    this.processingUserId = user.userId;
+    this.processingUserId = user.id;
     this.apiService
-      .post(`/admin/users/${user.userId}/approve`, {})
+      .put(`/admin/users/${user.id}/approve`, {})
       .subscribe({
         next: () => {
-          this.pendingUsers = this.pendingUsers.filter((u) => u.userId !== user.userId);
+          this.pendingUsers = this.pendingUsers.filter((u) => u.id !== user.id);
           this.processingUserId = null;
           this.snackBar.open(`${user.username} approved.`, 'Dismiss', { duration: 3000 });
           this.cdr.markForCheck();
@@ -243,12 +243,12 @@ export class UserManagementComponent implements OnInit {
   }
 
   rejectUser(user: PendingUser): void {
-    this.processingUserId = user.userId;
+    this.processingUserId = user.id;
     this.apiService
-      .post(`/admin/users/${user.userId}/reject`, {})
+      .put(`/admin/users/${user.id}/reject`, {})
       .subscribe({
         next: () => {
-          this.pendingUsers = this.pendingUsers.filter((u) => u.userId !== user.userId);
+          this.pendingUsers = this.pendingUsers.filter((u) => u.id !== user.id);
           this.processingUserId = null;
           this.snackBar.open(`${user.username} rejected.`, 'Dismiss', { duration: 3000 });
           this.cdr.markForCheck();
@@ -263,7 +263,7 @@ export class UserManagementComponent implements OnInit {
 
   changeRole(user: UserRecord, newRole: string): void {
     this.apiService
-      .patch(`/admin/users/${user.userId}/role`, { role: newRole })
+      .patch(`/admin/users/${user.id}/role`, { roleName: newRole })
       .subscribe({
         next: () => {
           user.role = newRole;
@@ -315,11 +315,14 @@ export class UserManagementComponent implements OnInit {
 
   private loadAllUsers(): void {
     this.loadingUsers = true;
-    this.apiService.get<UserRecord[]>('/admin/users').subscribe({
+    this.apiService.get<UserRecord[] | { content: UserRecord[] }>('/admin/users').subscribe({
       next: (d) => {
-        this.users = d;
+        // GET /admin/users returns a Spring Page ({ content: [...] }); unwrap it. Accept a plain
+        // array too so unit tests can stub either shape.
+        this.users = Array.isArray(d) ? d : d.content ?? [];
         this.loadingUsers = false;
         this.updatePagedUsers();
+        this.cdr.markForCheck();
       },
       error: () => {
         this.loadingUsers = false;

@@ -1,5 +1,6 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, throwError } from 'rxjs';
@@ -10,6 +11,18 @@ describe('ReportsCenterComponent', () => {
   let apiService: jasmine.SpyObj<ApiService>;
   let dialog: jasmine.SpyObj<MatDialog>;
   let snackBar: jasmine.SpyObj<MatSnackBar>;
+
+  // ngOnInit() calls subscribeToSSE(), which opens a real EventSource connection.
+  // In a fakeAsync zone that real network task leaks and destabilizes tick()/flush(),
+  // so stub the global EventSource with an inert fake that never opens a socket.
+  let realEventSource: typeof EventSource;
+  class FakeEventSource {
+    onmessage: ((e: MessageEvent) => void) | null = null;
+    onerror: ((e: Event) => void) | null = null;
+    onopen: ((e: Event) => void) | null = null;
+    constructor(public url: string) {}
+    close(): void {}
+  }
 
   const enrollments = [
     {
@@ -25,12 +38,17 @@ describe('ReportsCenterComponent', () => {
   ];
 
   beforeEach(() => {
+    realEventSource = (window as any).EventSource;
+    (window as any).EventSource = FakeEventSource as unknown as typeof EventSource;
+
     apiService = jasmine.createSpyObj('ApiService', ['get', 'post']);
     dialog = jasmine.createSpyObj('MatDialog', ['open']);
     snackBar = jasmine.createSpyObj('MatSnackBar', ['open']);
 
-    apiService.get.and.callFake((url: string) => {
-      if (url === '/notifications') return of(notifications);
+    apiService.get.and.callFake((url: string): any => {
+      // Return a fresh copy: a sibling test marks notifications as read in place, which would
+      // otherwise mutate this shared fixture and make unreadCount flaky under random test order.
+      if (url === '/notifications') return of(notifications.map((n) => ({ ...n })));
       if (url.includes('/reports/enrollments')) return of(enrollments);
       return of([]);
     });
@@ -38,12 +56,22 @@ describe('ReportsCenterComponent', () => {
     TestBed.configureTestingModule({
       imports: [ReportsCenterComponent],
       providers: [
+        provideNoopAnimations(),
         { provide: ApiService, useValue: apiService },
         { provide: MatDialog, useValue: dialog },
         { provide: MatSnackBar, useValue: snackBar },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     });
+
+    // Force the mocked Material services (providedIn 'root' is otherwise shadowed by the
+    // standalone component's own injector, so the component would use the real services).
+    TestBed.overrideProvider(MatSnackBar, { useValue: snackBar });
+    TestBed.overrideProvider(MatDialog, { useValue: dialog });
+  });
+
+  afterEach(() => {
+    (window as any).EventSource = realEventSource;
   });
 
   it('should be created', () => {
@@ -139,7 +167,7 @@ describe('ReportsCenterComponent', () => {
   }));
 
   it('onTabChange() loads seat utilization for index 1', fakeAsync(() => {
-    apiService.get.and.callFake((url: string) => {
+    apiService.get.and.callFake((url: string): any => {
       if (url === '/notifications') return of([]);
       if (url.includes('seat-utilization')) return of([]);
       return of([]);
@@ -158,7 +186,7 @@ describe('ReportsCenterComponent', () => {
   }));
 
   it('sets errorMessage when enrollments load fails', fakeAsync(() => {
-    apiService.get.and.callFake((url: string) => {
+    apiService.get.and.callFake((url: string): any => {
       if (url === '/notifications') return of([]);
       return throwError(() => new Error('fail'));
     });

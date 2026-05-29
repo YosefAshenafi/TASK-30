@@ -1,0 +1,100 @@
+-------------------------------------------------------------------------------
+Test set: com.meridian.api.NotificationTemplateControllerTest
+-------------------------------------------------------------------------------
+Tests run: 8, Failures: 8, Errors: 0, Skipped: 0, Time elapsed: 241.5 s <<< FAILURE! -- in com.meridian.api.NotificationTemplateControllerTest
+com.meridian.api.NotificationTemplateControllerTest.listTemplates_asAdmin_returns200WithTemplates -- Time elapsed: 30.05 s <<< FAILURE!
+java.lang.AssertionError: Status expected:<200> but was:<500>
+	at org.springframework.test.util.AssertionErrors.fail(AssertionErrors.java:59)
+	at org.springframework.test.util.AssertionErrors.assertEquals(AssertionErrors.java:122)
+	at org.springframework.test.web.servlet.result.StatusResultMatchers.lambda$matcher$9(StatusResultMatchers.java:637)
+	at org.springframework.test.web.servlet.MockMvc$1.andExpect(MockMvc.java:214)
+	at com.meridian.api.TestContainersBase.loginAs(TestContainersBase.java:56)
+	at com.meridian.api.NotificationTemplateControllerTest.setUp(NotificationTemplateControllerTest.java:30)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+com.meridian.api.NotificationTemplateControllerTest.listTemplates_unauthenticated_returns401 -- Time elapsed: 30.02 s <<< FAILURE!
+java.lang.AssertionError: Status expected:<200> but was:<500>
+	at org.springframework.test.util.AssertionErrors.fail(AssertionErrors.java:59)
+	at org.springframework.test.util.AssertionErrors.assertEquals(AssertionErrors.java:122)
+	at org.springframework.test.web.servlet.result.StatusResultMatchers.lambda$matcher$9(StatusResultMatchers.java:637)
+	at org.springframework.test.web.servlet.MockMvc$1.andExpect(MockMvc.java:214)
+	at com.meridian.api.TestContainersBase.loginAs(TestContainersBase.java:56)
+	at com.meridian.api.NotificationTemplateControllerTest.setUp(NotificationTemplateControllerTest.java:30)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+com.meridian.api.NotificationTemplateControllerTest.listTemplates_asStudent_returns403 -- Time elapsed: 30.03 s <<< FAILURE!
+java.lang.AssertionError: Status expected:<200> but was:<500>
+	at org.springframework.test.util.AssertionErrors.fail(AssertionErrors.java:59)
+	at org.springframework.test.util.AssertionErrors.assertEquals(AssertionErrors.java:122)
+	at org.springframework.test.web.servlet.result.StatusResultMatchers.lambda$matcher$9(StatusResultMatchers.java:637)
+	at org.springframework.test.web.servlet.MockMvc$1.andExpect(MockMvc.java:214)
+	at com.meridian.api.TestContainersBase.loginAs(TestContainersBase.java:56)
+	at com.meridian.api.NotificationTemplateControllerTest.setUp(NotificationTemplateControllerTest.java:30)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+com.meridian.api.NotificationTemplateControllerTest.updateTemplate_asAdmin_returns200WithUpdatedValues -- Time elapsed: 30.03 s <<< FAILURE!
+java.lang.AssertionError: Status expected:<200> but was:<500>
+	at org.springframework.test.util.AssertionErrors.fail(AssertionErrors.java:59)
+	at org.springframework.test.util.AssertionErrors.assertEquals(AssertionErrors.java:122)
+	at org.springframework.test.web.servlet.result.StatusResultMatchers.lambda$matcher$9(StatusResultMatchers.java:637)
+	at org.springframework.test.web.servlet.MockMvc$1.andExpect(MockMvc.java:214)
+	at com.meridian.api.TestContainersBase.loginAs(TestContainersBase.java:56)
+	at com.meridian.api.NotificationTemplateControllerTest.setUp(NotificationTemplateControllerTest.java:30)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+com.meridian.api.NotificationTemplateControllerTest.updateTemplate_blankSubject_returns400 -- Time elapsed: 30.06 s <<< FAILURE!
+java.lang.AssertionError: Status expected:<200> but was:<500>
+	at org.springframework.test.util.AssertionErrors.fail(AssertionErrors.java:59)
+	at org.springframework.test.util.AssertionErrors.assertEquals(AssertionErrors.java:122)
+	at org.springframework.test.web.servlet.result.StatusResultMatchers.lambda$matcher$9(StatusResultMatchers.java:637)
+	at org.springframework.test.web.servlet.MockMvc$1.andExpect(MockMvc.java:214)
+	at com.meridian.api.TestContainersBase.loginAs(TestContainersBase.java:56)
+	at com.meridian.api.NotificationTemplateControllerTest.setUp(NotificationTemplateControllerTest.java:30)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+com.meridian.api.NotificationTemplateControllerTest.updateTemplate_unknownName_returns404 -- Time elapsed: 30.03 s <<< FAILURE!
+java.lang.AssertionError: Status expected:<200> but was:<500>
+	at org.springframework.test.util.AssertionErrors.fail(AssertionErrors.java:59)
+	at org.springframework.test.util.AssertionErrors.assertEquals(AssertionErrors.java:122)
+	at org.springframework.test.web.servlet.result.StatusResultMatchers.lambda$matcher$9(StatusResultMatchers.java:637)
+	at org.springframework.test.web.servlet.MockMvc$1.andExpect(MockMvc.java:214)
+	at com.meridian.api.TestContainersBase.loginAs(TestContainersBase.java:56)
+	at com.meridian.api.NotificationTemplateControllerTest.setUp(NotificationTemplateControllerTest.java:30)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+com.meridian.api.NotificationTemplateControllerTest.updateTemplate_asStudent_returns403 -- Time elapsed: 30.03 s <<< FAILURE!
+java.lang.AssertionError: Status expected:<200> but was:<500>
+	at org.springframework.test.util.AssertionErrors.fail(AssertionErrors.java:59)
+	at org.springframework.test.util.AssertionErrors.assertEquals(AssertionErrors.java:122)
+	at org.springframework.test.web.servlet.result.StatusResultMatchers.lambda$matcher$9(StatusResultMatchers.java:637)
+	at org.springframework.test.web.servlet.MockMvc$1.andExpect(MockMvc.java:214)
+	at com.meridian.api.TestContainersBase.loginAs(TestContainersBase.java:56)
+	at com.meridian.api.NotificationTemplateControllerTest.setUp(NotificationTemplateControllerTest.java:30)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+com.meridian.api.NotificationTemplateControllerTest.updateTemplate_unauthenticated_returns401 -- Time elapsed: 30.02 s <<< FAILURE!
+java.lang.AssertionError: Status expected:<200> but was:<500>
+	at org.springframework.test.util.AssertionErrors.fail(AssertionErrors.java:59)
+	at org.springframework.test.util.AssertionErrors.assertEquals(AssertionErrors.java:122)
+	at org.springframework.test.web.servlet.result.StatusResultMatchers.lambda$matcher$9(StatusResultMatchers.java:637)
+	at org.springframework.test.web.servlet.MockMvc$1.andExpect(MockMvc.java:214)
+	at com.meridian.api.TestContainersBase.loginAs(TestContainersBase.java:56)
+	at com.meridian.api.NotificationTemplateControllerTest.setUp(NotificationTemplateControllerTest.java:30)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+

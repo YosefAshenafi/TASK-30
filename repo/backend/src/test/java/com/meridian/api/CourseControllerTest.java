@@ -4,6 +4,7 @@ import com.meridian.dto.CreateCourseRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.UUID;
 
