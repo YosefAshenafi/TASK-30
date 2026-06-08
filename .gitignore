@@ -1,2 +1,40 @@
 # Planning artifacts (private, never published)
 plans/
+
+# Build artifacts / compiled output
+target/
+**/target/
+*.class
+dist/
+build/
+.next/
+out/
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+
+# Coverage / caches
+coverage/
+htmlcov/
+.coverage
+*.tsbuildinfo
+
+# Environment (only .env.example is committed)
+.env
+.env.local
+.env.*.local
+.env.production
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+__MACOSX/
+
+# AI tool session artifacts
+.claude/
+.codex/
+session.json
+rollout-*.jsonl
