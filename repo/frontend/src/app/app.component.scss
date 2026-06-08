@@ -20,10 +20,29 @@
     }
   }
 
+  // The logout entry is a native <button> styled as a list item. Strip the user-agent
+  // button chrome (border/background/shadow) and the persistent focus ring so it does not
+  // read as an "active/selected" nav item. A keyboard-only focus ring is kept for a11y.
   .logout-btn {
     width: 100%;
     text-align: left;
     color: rgba(0, 0, 0, 0.87);
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    font: inherit;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+
+    &:focus {
+      outline: none;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #3f51b5;
+      outline-offset: -2px;
+    }
   }
 }
 

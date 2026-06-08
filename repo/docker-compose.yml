@@ -117,8 +117,14 @@ services:
     # in this image. The Playwright config lives in tests/e2e/; its testDir resolves relative to
     # the config file, so the specs in tests/e2e/ are picked up.
     # `npx --yes` auto-confirms any package-install prompt so nothing blocks waiting for input.
+    # npm config set ... raises fetch retries/timeouts so a reset connection mid-download
+    # (ECONNRESET) on a flaky/CI network is retried instead of aborting the e2e suite.
     command: >
-      bash -lc "npm install --no-audit --no-fund --no-progress --silent &&
+      bash -lc "npm config set fetch-retries 6 &&
+                npm config set fetch-retry-mintimeout 20000 &&
+                npm config set fetch-retry-maxtimeout 180000 &&
+                npm config set fetch-timeout 600000 &&
+                npm install --no-audit --no-fund --no-progress --silent &&
                 npx --yes playwright install chromium &&
                 npx --yes playwright test --config=e2e/playwright.config.ts --reporter=line"
     profiles:

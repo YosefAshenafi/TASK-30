@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # ---- Build stage: compile the Angular application ----
 FROM node:20-alpine AS build
 WORKDIR /app
@@ -8,7 +6,14 @@ WORKDIR /app
 # Inherited by the `test` stage below (FROM build).
 ENV NG_CLI_ANALYTICS=false
 COPY package.json ./
-RUN npm install
+# Make the install resilient to flaky/CI networks: npm's default of 2 fetch retries is not
+# enough when a connection is reset mid-download (ECONNRESET); raise retries/timeouts and skip
+# the audit/fund network round-trips. Behaviour of the resulting app is unchanged.
+RUN npm config set fetch-retries 6 \
+ && npm config set fetch-retry-mintimeout 20000 \
+ && npm config set fetch-retry-maxtimeout 180000 \
+ && npm config set fetch-timeout 600000 \
+ && npm install --no-audit --no-fund
 COPY . .
 RUN npm run build
 

@@ -17,16 +17,16 @@ import { MatDividerModule } from '@angular/material/divider';
 import { ApiService } from '../core/api.service';
 
 interface BackupRecord {
-  backupId: string;
+  id: string;
   type: 'FULL' | 'INCREMENTAL';
+  path: string;
   createdAt: string;
   sizeBytes: number;
   retentionUntil: string;
-  status: string;
 }
 
 interface RecycleBinRecord {
-  recycleId: string;
+  id: string;
   entityType: string;
   entityId: string;
   deletedAt: string;
@@ -123,7 +123,9 @@ interface RecycleBinRecord {
             </ng-container>
             <ng-container matColumnDef="status">
               <th mat-header-cell *matHeaderCellDef>Status</th>
-              <td mat-cell *matCellDef="let r">{{ r.status }}</td>
+              <td mat-cell *matCellDef="let r">
+                <span class="status-badge">Completed</span>
+              </td>
             </ng-container>
             <tr mat-header-row *matHeaderRowDef="historyColumns"></tr>
             <tr mat-row *matRowDef="let r; columns: historyColumns"></tr>
@@ -179,7 +181,7 @@ interface RecycleBinRecord {
                   mat-stroked-button
                   color="primary"
                   (click)="restoreEntity(r)"
-                  [disabled]="processingId === r.recycleId"
+                  [disabled]="processingId === r.id"
                   class="action-btn"
                 >
                   <mat-icon>restore</mat-icon>
@@ -189,7 +191,7 @@ interface RecycleBinRecord {
                   mat-stroked-button
                   color="warn"
                   (click)="purgeEntity(r)"
-                  [disabled]="processingId === r.recycleId"
+                  [disabled]="processingId === r.id"
                 >
                   <mat-icon>delete_forever</mat-icon>
                   Delete
@@ -219,6 +221,7 @@ interface RecycleBinRecord {
       .empty-state mat-icon { font-size: 48px; height: 48px; width: 48px; }
       .error-banner { background: #f44336; color: white; padding: 8px 16px; border-radius: 4px; margin-top: 12px; }
       code { background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+      .status-badge { background: #e8f5e9; color: #2e7d32; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
     `,
   ],
 })
@@ -282,12 +285,12 @@ export class BackupAdminComponent implements OnInit {
   }
 
   restoreEntity(record: RecycleBinRecord): void {
-    this.processingId = record.recycleId;
+    this.processingId = record.id;
     this.apiService
-      .post(`/admin/recycle-bin/${record.recycleId}/restore`, {})
+      .post(`/admin/recycle-bin/${record.id}/restore`, {})
       .subscribe({
         next: () => {
-          this.recycleBin = this.recycleBin.filter((r) => r.recycleId !== record.recycleId);
+          this.recycleBin = this.recycleBin.filter((r) => r.id !== record.id);
           this.processingId = null;
           this.snackBar.open('Entity restored.', 'Dismiss', { duration: 3000 });
           this.cdr.markForCheck();
@@ -301,12 +304,12 @@ export class BackupAdminComponent implements OnInit {
   }
 
   purgeEntity(record: RecycleBinRecord): void {
-    this.processingId = record.recycleId;
+    this.processingId = record.id;
     this.apiService
-      .delete(`/admin/recycle-bin/${record.recycleId}`)
+      .delete(`/admin/recycle-bin/${record.id}`)
       .subscribe({
         next: () => {
-          this.recycleBin = this.recycleBin.filter((r) => r.recycleId !== record.recycleId);
+          this.recycleBin = this.recycleBin.filter((r) => r.id !== record.id);
           this.processingId = null;
           this.snackBar.open('Entity permanently deleted.', 'Dismiss', { duration: 3000 });
           this.cdr.markForCheck();
@@ -321,33 +324,39 @@ export class BackupAdminComponent implements OnInit {
 
   private loadBackupHistory(): void {
     this.loadingHistory = true;
-    this.apiService.get<BackupRecord[]>('/admin/backup/history').subscribe({
-      next: (d) => {
-        this.backupHistory = d;
-        this.loadingHistory = false;
-        this.cdr.markForCheck();
-      },
-      error: () => {
-        this.loadingHistory = false;
-        this.errorMessage = 'Failed to load backup history.';
-        this.cdr.markForCheck();
-      },
-    });
+    // GET /admin/backup/history returns a Spring Page ({ content: [...] }); unwrap it.
+    this.apiService
+      .get<BackupRecord[] | { content: BackupRecord[] }>('/admin/backup/history')
+      .subscribe({
+        next: (d) => {
+          this.backupHistory = Array.isArray(d) ? d : d.content ?? [];
+          this.loadingHistory = false;
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.loadingHistory = false;
+          this.errorMessage = 'Failed to load backup history.';
+          this.cdr.markForCheck();
+        },
+      });
   }
 
   private loadRecycleBin(): void {
     this.loadingRecycleBin = true;
-    this.apiService.get<RecycleBinRecord[]>('/admin/recycle-bin').subscribe({
-      next: (d) => {
-        this.recycleBin = d;
-        this.loadingRecycleBin = false;
-        this.cdr.markForCheck();
-      },
-      error: () => {
-        this.loadingRecycleBin = false;
-        this.errorMessage = 'Failed to load recycle bin.';
-        this.cdr.markForCheck();
-      },
-    });
+    // GET /admin/recycle-bin returns a Spring Page ({ content: [...] }); unwrap it.
+    this.apiService
+      .get<RecycleBinRecord[] | { content: RecycleBinRecord[] }>('/admin/recycle-bin')
+      .subscribe({
+        next: (d) => {
+          this.recycleBin = Array.isArray(d) ? d : d.content ?? [];
+          this.loadingRecycleBin = false;
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.loadingRecycleBin = false;
+          this.errorMessage = 'Failed to load recycle bin.';
+          this.cdr.markForCheck();
+        },
+      });
   }
 }

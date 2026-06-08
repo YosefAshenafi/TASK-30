@@ -64,6 +64,10 @@ export class AppComponent implements OnInit {
     return this.authService.hasRole('ADMINISTRATOR');
   }
 
+  isFacultyOrAdmin(): boolean {
+    return this.authService.hasRole('FACULTY_MENTOR', 'ADMINISTRATOR');
+  }
+
   logout(): void {
     this.authService.logout().subscribe();
   }

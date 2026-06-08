@@ -24,14 +24,15 @@ interface UserOption {
 }
 
 interface DataPermission {
-  permissionId: string;
+  id: string;
   fieldName: string;
   classification: string;
-  grantedBy: string;
-  grantedAt: string;
+  grantedBy: string | null;
+  createdAt: string;
 }
 
-const CLASSIFICATIONS = ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'RESTRICTED', 'PII'];
+// Must match the backend PermissionUpdateRequest pattern (PUBLIC|INTERNAL|CONFIDENTIAL|RESTRICTED).
+const CLASSIFICATIONS = ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'RESTRICTED'];
 
 @Component({
   selector: 'app-governance',
@@ -117,7 +118,7 @@ const CLASSIFICATIONS = ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'RESTRICTED', 'PI
             </ng-container>
             <ng-container matColumnDef="grantedAt">
               <th mat-header-cell *matHeaderCellDef>Granted At</th>
-              <td mat-cell *matCellDef="let r">{{ r.grantedAt | date: 'medium' }}</td>
+              <td mat-cell *matCellDef="let r">{{ r.createdAt | date: 'medium' }}</td>
             </ng-container>
             <tr mat-header-row *matHeaderRowDef="permColumns"></tr>
             <tr mat-row *matRowDef="let r; columns: permColumns"></tr>
@@ -243,18 +244,25 @@ export class GovernanceComponent implements OnInit {
     if (this.grantForm.invalid || !this.selectedUserId) return;
     this.grantingPerm = true;
 
+    const userId = this.selectedUserId;
     const { fieldName, classification } = this.grantForm.value;
+    // Backend exposes PUT (upsert) on this path; RESTRICTED goes through an approval workflow
+    // (HTTP 202) and therefore won't appear in the table until approved.
     this.apiService
-      .post<DataPermission>(`/governance/users/${this.selectedUserId}/permissions`, {
+      .put<DataPermission>(`/governance/users/${userId}/permissions`, {
         fieldName,
         classification,
       })
       .subscribe({
-        next: (perm) => {
-          this.permissions.push(perm);
+        next: () => {
           this.grantingPerm = false;
           this.grantForm.reset({ classification: 'CONFIDENTIAL' });
-          this.snackBar.open('Permission granted.', 'Dismiss', { duration: 3000 });
+          const msg =
+            classification === 'RESTRICTED'
+              ? 'RESTRICTED change submitted for approval.'
+              : 'Permission granted.';
+          this.snackBar.open(msg, 'Dismiss', { duration: 3000 });
+          this.loadPermissions(userId);
           this.cdr.markForCheck();
         },
         error: () => {
@@ -271,18 +279,23 @@ export class GovernanceComponent implements OnInit {
 
   private loadUsers(): void {
     this.loadingUsers = true;
-    this.apiService.get<UserOption[]>('/admin/users').subscribe({
-      next: (d) => {
-        this.users = d.map((u: any) => ({ userId: u.userId, username: u.username }));
-        this.loadingUsers = false;
-        this.cdr.markForCheck();
-      },
-      error: () => {
-        this.loadingUsers = false;
-        this.errorMessage = 'Failed to load users.';
-        this.cdr.markForCheck();
-      },
-    });
+    // GET /admin/users returns a Spring Page ({ content: [...] }); unwrap it. The user identifier
+    // field is `id` (UserSummaryDto), not `userId`. Accept a bare array too for test stubs.
+    this.apiService
+      .get<UserOption[] | { content: any[] }>('/admin/users')
+      .subscribe({
+        next: (d) => {
+          const list: any[] = Array.isArray(d) ? d : d.content ?? [];
+          this.users = list.map((u) => ({ userId: u.id ?? u.userId, username: u.username }));
+          this.loadingUsers = false;
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.loadingUsers = false;
+          this.errorMessage = 'Failed to load users.';
+          this.cdr.markForCheck();
+        },
+      });
   }
 
   private loadPermissions(userId: string): void {

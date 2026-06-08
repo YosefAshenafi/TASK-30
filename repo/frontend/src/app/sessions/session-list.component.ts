@@ -12,6 +12,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatCardModule } from '@angular/material/card';
+import { forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { ApiService } from '../core/api.service';
 
 export interface SessionSummary {
@@ -211,9 +213,23 @@ export class SessionListComponent implements OnInit {
 
   private loadSessions(): void {
     this.loading = true;
-    this.apiService.get<SessionSummary[]>('/sessions').subscribe({
-      next: (data) => {
-        this.sessions = data;
+    // GET /sessions returns a Spring Page ({ content: [...] }); the items carry courseId but no
+    // courseName, so resolve names from the course catalog (best-effort — a courses failure must
+    // not hide the sessions). Accept a bare array too so unit-test stubs work either way.
+    forkJoin({
+      sessions: this.apiService.get<SessionSummary[] | { content: SessionSummary[] }>('/sessions'),
+      courses: this.apiService
+        .get<any[] | { content: any[] }>('/courses')
+        .pipe(catchError(() => of({ content: [] }))),
+    }).subscribe({
+      next: ({ sessions, courses }) => {
+        const sList: any[] = Array.isArray(sessions) ? sessions : sessions.content ?? [];
+        const cList: any[] = Array.isArray(courses) ? courses : courses.content ?? [];
+        const nameById = new Map<string, string>(cList.map((c) => [c.id, c.title]));
+        this.sessions = sList.map((s) => ({
+          ...s,
+          courseName: s.courseName ?? nameById.get(s.courseId) ?? s.courseId,
+        }));
         this.loading = false;
         this.cdr.markForCheck();
       },

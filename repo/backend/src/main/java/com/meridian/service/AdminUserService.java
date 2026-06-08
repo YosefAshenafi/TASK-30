@@ -13,6 +13,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,15 +39,21 @@ public class AdminUserService {
     private final RoleRepository roleRepository;
     private final AuditService auditService;
     private final DataPermissionRepository dataPermissionRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate;
 
     public AdminUserService(UserRepository userRepository,
                             RoleRepository roleRepository,
                             AuditService auditService,
-                            DataPermissionRepository dataPermissionRepository) {
+                            DataPermissionRepository dataPermissionRepository,
+                            PasswordEncoder passwordEncoder,
+                            JdbcTemplate jdbcTemplate) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.auditService = auditService;
         this.dataPermissionRepository = dataPermissionRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Transactional(readOnly = true)
@@ -83,8 +91,7 @@ public class AdminUserService {
 
     public UserSummaryDto changeRole(UUID id, String roleName) {
         User user = findUser(id);
-        Role role = roleRepository.findByName(roleName)
-                .orElseThrow(() -> AppException.notFound("Role not found: " + roleName));
+        Role role = resolveRole(roleName);
 
         String oldRole = user.getPrimaryRole();
         // Replace the role set in place. The loaded User is a managed entity whose `roles` is a
@@ -101,6 +108,116 @@ public class AdminUserService {
                 null, null);
 
         return toSummaryDto(saved);
+    }
+
+    /**
+     * Creates a new user account directly (administrator action). The account is created ACTIVE
+     * with the supplied role. The role name is accepted with or without the {@code ROLE_} prefix.
+     */
+    public UserSummaryDto createUser(String username, String rawPassword, String roleName, String organizationId) {
+        if (userRepository.findByUsername(username).isPresent()) {
+            throw AppException.conflict("Username already exists: " + username);
+        }
+        Role role = resolveRole(roleName);
+
+        User user = new User();
+        user.setUsername(username);
+        user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        user.setStatus(UserStatus.ACTIVE);
+        if (organizationId != null && !organizationId.isBlank()) {
+            try {
+                user.setOrganizationId(UUID.fromString(organizationId.trim()));
+            } catch (IllegalArgumentException e) {
+                throw AppException.badRequest("Invalid organizationId: " + organizationId);
+            }
+        }
+        user.getRoles().add(role);
+
+        User saved = userRepository.save(user);
+        log.info("User created by admin: userId={}, username={}, role={}", saved.getId(), username, role.getName());
+        // Audit as a system action (user_id=null). Auditing is @Async and runs on a separate
+        // connection; the just-created user row is not yet committed when it fires, so recording
+        // the new user as the audit actor would violate audit_events_user_id_fkey and lose the
+        // audit record. The new user's id is preserved in the entity_id field instead.
+        auditService.logEvent(null, "PERMISSION_CHANGE", "USER", saved.getId().toString(),
+                "{\"action\":\"account_created\",\"role\":\"" + role.getName() + "\"}", null, null);
+        return toSummaryDto(saved);
+    }
+
+    /**
+     * Updates a user's account status (e.g. ACTIVE, LOCKED, PENDING, REJECTED).
+     */
+    public UserSummaryDto updateStatus(UUID id, String statusName) {
+        User user = findUser(id);
+        UserStatus status;
+        try {
+            status = UserStatus.valueOf(statusName.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw AppException.badRequest("Invalid status: " + statusName);
+        }
+        UserStatus oldStatus = user.getStatus();
+        user.setStatus(status);
+        User saved = userRepository.save(user);
+        log.info("User status changed: userId={}, oldStatus={}, newStatus={}", id, oldStatus, status);
+        auditService.logEvent(id, "PERMISSION_CHANGE", "USER", id.toString(),
+                String.format("{\"oldStatus\":\"%s\",\"newStatus\":\"%s\"}", oldStatus, status),
+                null, null);
+        return toSummaryDto(saved);
+    }
+
+    /**
+     * Permanently (hard) deletes a user and all rows that reference it. Child rows whose foreign
+     * keys are not {@code ON DELETE CASCADE} are removed (or nulled, for audit/anomaly history)
+     * first, in dependency order, so the final user delete cannot fail with a constraint violation.
+     */
+    public void deleteUser(UUID id, String requestingUsername) {
+        // findUser respects the @SQLRestriction (deleted_at IS NULL); verifies the user exists.
+        User user = findUser(id);
+        String username = user.getUsername();
+
+        if (username.equals(requestingUsername)) {
+            throw AppException.badRequest("You cannot delete your own account");
+        }
+
+        // Operational data owned by the user (no ON DELETE CASCADE) — delete in dependency order.
+        jdbcTemplate.update("DELETE FROM attempts WHERE user_id = ?", id);
+        // training_sessions delete cascades session_activities and draft_assessments.
+        jdbcTemplate.update("DELETE FROM training_sessions WHERE user_id = ?", id);
+        jdbcTemplate.update("DELETE FROM enrollments WHERE user_id = ?", id);
+        jdbcTemplate.update("DELETE FROM certifications WHERE user_id = ?", id);
+        jdbcTemplate.update("DELETE FROM notifications WHERE user_id = ?", id);
+        jdbcTemplate.update("DELETE FROM report_schedules WHERE user_id = ?", id);
+        jdbcTemplate.update("DELETE FROM approvals WHERE requester_id = ?", id);
+        jdbcTemplate.update("UPDATE approvals SET approver_id = NULL WHERE approver_id = ?", id);
+        jdbcTemplate.update("DELETE FROM recovery_drills WHERE performed_by = ?", id);
+        // Preserve audit/anomaly history by detaching the user reference rather than deleting it.
+        jdbcTemplate.update("UPDATE audit_events SET user_id = NULL WHERE user_id = ?", id);
+        jdbcTemplate.update("UPDATE anomalies SET user_id = NULL WHERE user_id = ?", id);
+        jdbcTemplate.update("UPDATE data_permissions SET granted_by = NULL WHERE granted_by = ?", id);
+        jdbcTemplate.update("UPDATE recycle_bin SET deleted_by = NULL WHERE deleted_by = ?", id);
+
+        // Final delete cascades user_roles, refresh_tokens, device_fingerprints,
+        // and data_permissions(user_id). Native delete bypasses the soft-delete @SQLRestriction.
+        jdbcTemplate.update("DELETE FROM users WHERE id = ?", id);
+
+        log.info("User hard-deleted by admin: userId={}, username={}", id, username);
+        auditService.logEvent(null, "DATA_DELETE", "USER", id.toString(),
+                "{\"action\":\"account_deleted\",\"username\":\"" + username + "\"}", null, null);
+    }
+
+    /**
+     * Resolves a role by name, tolerating both the bare ({@code FACULTY_MENTOR}) and
+     * prefixed ({@code ROLE_FACULTY_MENTOR}) forms that callers/seed data use.
+     */
+    private Role resolveRole(String roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            throw AppException.badRequest("Role must not be blank");
+        }
+        String trimmed = roleName.trim();
+        String prefixed = trimmed.startsWith("ROLE_") ? trimmed : "ROLE_" + trimmed;
+        return roleRepository.findByName(prefixed)
+                .or(() -> roleRepository.findByName(trimmed))
+                .orElseThrow(() -> AppException.notFound("Role not found: " + roleName));
     }
 
     private User findUser(UUID id) {

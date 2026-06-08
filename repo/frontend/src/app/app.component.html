@@ -5,9 +5,13 @@
         <mat-icon matListItemIcon>dashboard</mat-icon>
         <span matListItemTitle>Dashboard</span>
       </a>
-      <a mat-list-item routerLink="/sessions" routerLinkActive="active-link" *ngIf="isStudent()">
+      <a mat-list-item routerLink="/sessions" routerLinkActive="active-link">
         <mat-icon matListItemIcon>fitness_center</mat-icon>
-        <span matListItemTitle>My Sessions</span>
+        <span matListItemTitle>{{ isStudent() ? 'My Sessions' : 'Sessions' }}</span>
+      </a>
+      <a mat-list-item routerLink="/courses" routerLinkActive="active-link" *ngIf="isFacultyOrAdmin()">
+        <mat-icon matListItemIcon>menu_book</mat-icon>
+        <span matListItemTitle>Course Management</span>
       </a>
       <a mat-list-item routerLink="/analytics" routerLinkActive="active-link" *ngIf="isMentorOrAdmin()">
         <mat-icon matListItemIcon>bar_chart</mat-icon>

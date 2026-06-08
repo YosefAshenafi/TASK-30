@@ -19,7 +19,7 @@ describe('UserManagementComponent', () => {
   ];
 
   beforeEach(() => {
-    apiService = jasmine.createSpyObj('ApiService', ['get', 'post', 'put', 'patch']);
+    apiService = jasmine.createSpyObj('ApiService', ['get', 'post', 'put', 'patch', 'delete']);
     snackBar = jasmine.createSpyObj('MatSnackBar', ['open']);
 
     apiService.get.and.callFake((url: string): any => {
@@ -157,5 +157,69 @@ describe('UserManagementComponent', () => {
     tick();
 
     expect(fixture.componentInstance.errorMessage).toBe('Failed to load pending users.');
+  }));
+
+  it('createUser() POSTs the new user and reloads the list', fakeAsync(() => {
+    apiService.post.and.returnValue(of({ id: 'u9', username: 'newbie' }));
+    const fixture = TestBed.createComponent(UserManagementComponent);
+    fixture.detectChanges();
+    tick();
+
+    const comp = fixture.componentInstance;
+    comp.createForm.setValue({ username: 'newbie', password: 'Newbie@12345678', role: 'STUDENT' });
+    comp.createUser();
+    flush();
+
+    expect(apiService.post).toHaveBeenCalledWith('/admin/users', {
+      username: 'newbie',
+      password: 'Newbie@12345678',
+      role: 'STUDENT',
+    });
+    expect(comp.creatingUser).toBeFalse();
+    expect(comp.showCreateForm).toBeFalse();
+    expect(snackBar.open).toHaveBeenCalledWith('User newbie created.', 'Dismiss', jasmine.any(Object));
+  }));
+
+  it('changeStatus() PATCHes the status endpoint and updates the user', fakeAsync(() => {
+    apiService.patch.and.returnValue(of({}));
+    const fixture = TestBed.createComponent(UserManagementComponent);
+    fixture.detectChanges();
+    tick();
+
+    const user = fixture.componentInstance.users[0];
+    fixture.componentInstance.changeStatus(user, 'LOCKED');
+    flush();
+
+    expect(apiService.patch).toHaveBeenCalledWith('/admin/users/u2/status', { status: 'LOCKED' });
+    expect(user.status).toBe('LOCKED');
+    expect(snackBar.open).toHaveBeenCalledWith('Status updated to LOCKED.', 'Dismiss', jasmine.any(Object));
+  }));
+
+  it('deleteUser() DELETEs after confirmation and removes the user', fakeAsync(() => {
+    spyOn(window, 'confirm').and.returnValue(true);
+    apiService.delete.and.returnValue(of(null));
+    const fixture = TestBed.createComponent(UserManagementComponent);
+    fixture.detectChanges();
+    tick();
+
+    const comp = fixture.componentInstance;
+    comp.deleteUser(allUsers[0]);
+    flush();
+
+    expect(apiService.delete).toHaveBeenCalledWith('/admin/users/u2');
+    expect(comp.users.find((u) => u.id === 'u2')).toBeUndefined();
+    expect(snackBar.open).toHaveBeenCalledWith('User alice deleted.', 'Dismiss', jasmine.any(Object));
+  }));
+
+  it('deleteUser() does nothing when confirmation is declined', fakeAsync(() => {
+    spyOn(window, 'confirm').and.returnValue(false);
+    const fixture = TestBed.createComponent(UserManagementComponent);
+    fixture.detectChanges();
+    tick();
+
+    fixture.componentInstance.deleteUser(allUsers[0]);
+    flush();
+
+    expect(apiService.delete).not.toHaveBeenCalled();
   }));
 });

@@ -32,7 +32,6 @@ export const routes: Routes = [
         (m) => m.SessionListComponent
       ),
     canActivate: [authGuard],
-    data: { roles: ['STUDENT'] },
   },
   {
     path: 'sessions/new',
@@ -41,7 +40,6 @@ export const routes: Routes = [
         (m) => m.SessionCaptureComponent
       ),
     canActivate: [authGuard],
-    data: { roles: ['STUDENT'] },
   },
   {
     path: 'sessions/:id',
@@ -50,7 +48,6 @@ export const routes: Routes = [
         (m) => m.SessionCaptureComponent
       ),
     canActivate: [authGuard],
-    data: { roles: ['STUDENT'] },
   },
   {
     path: 'analytics',
@@ -69,6 +66,15 @@ export const routes: Routes = [
       ),
     canActivate: [authGuard],
     data: { roles: ['FACULTY_MENTOR', 'CORPORATE_MENTOR', 'ADMINISTRATOR'] },
+  },
+  {
+    path: 'courses',
+    loadComponent: () =>
+      import('./courses/course-management.component').then(
+        (m) => m.CourseManagementComponent
+      ),
+    canActivate: [authGuard],
+    data: { roles: ['ADMINISTRATOR', 'FACULTY_MENTOR'] },
   },
   {
     path: 'admin/users',

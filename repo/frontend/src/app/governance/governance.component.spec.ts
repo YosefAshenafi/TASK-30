@@ -17,16 +17,16 @@ describe('GovernanceComponent', () => {
   ];
   const permissions = [
     {
-      permissionId: 'p1',
+      id: 'p1',
       fieldName: 'ssn',
-      classification: 'PII',
+      classification: 'CONFIDENTIAL',
       grantedBy: 'admin',
-      grantedAt: '2025-01-01T00:00:00Z',
+      createdAt: '2025-01-01T00:00:00Z',
     },
   ];
 
   beforeEach(() => {
-    apiService = jasmine.createSpyObj('ApiService', ['get', 'post']);
+    apiService = jasmine.createSpyObj('ApiService', ['get', 'post', 'put']);
     snackBar = jasmine.createSpyObj('MatSnackBar', ['open']);
 
     apiService.get.and.callFake((url: string): any => {
@@ -90,20 +90,12 @@ describe('GovernanceComponent', () => {
     comp.grantPermission();
     tick();
 
-    expect(apiService.post).not.toHaveBeenCalled();
+    expect(apiService.put).not.toHaveBeenCalled();
   }));
 
-  it('grantPermission() POSTs permission and adds to list', fakeAsync(() => {
-    const newPerm = {
-      permissionId: 'p2',
-      fieldName: 'date_of_birth',
-      classification: 'PII',
-      grantedBy: 'admin',
-      grantedAt: '2025-02-01T00:00:00Z',
-    };
-    apiService.post.and.returnValue(of(newPerm));
-    // Return a fresh permissions array for the load so grantPermission()'s
-    // in-place push does not mutate the shared `permissions` fixture const.
+  it('grantPermission() PUTs permission and reloads the list', fakeAsync(() => {
+    apiService.put.and.returnValue(of({}));
+    // After granting, the component reloads permissions from the server.
     apiService.get.and.callFake((url: string): any => {
       if (url === '/admin/users') return of(users);
       if (url.includes('/governance/users/')) return of([...permissions]);
@@ -115,26 +107,25 @@ describe('GovernanceComponent', () => {
     tick();
 
     const comp = fixture.componentInstance;
-    comp.selectedUserId = 'u1';
     comp.onUserSelect('u1');
     tick();
 
     comp.grantForm.get('fieldName')!.setValue('date_of_birth');
-    comp.grantForm.get('classification')!.setValue('PII');
+    comp.grantForm.get('classification')!.setValue('CONFIDENTIAL');
     comp.grantPermission();
     tick();
 
-    expect(apiService.post).toHaveBeenCalledWith('/governance/users/u1/permissions', {
+    expect(apiService.put).toHaveBeenCalledWith('/governance/users/u1/permissions', {
       fieldName: 'date_of_birth',
-      classification: 'PII',
+      classification: 'CONFIDENTIAL',
     });
-    expect(comp.permissions).toContain(newPerm);
+    expect(comp.permissions).toEqual(permissions);
     expect(comp.grantingPerm).toBeFalse();
     expect(snackBar.open).toHaveBeenCalledWith('Permission granted.', 'Dismiss', jasmine.any(Object));
   }));
 
   it('grantPermission() shows error snack on failure', fakeAsync(() => {
-    apiService.post.and.returnValue(throwError(() => new Error('fail')));
+    apiService.put.and.returnValue(throwError(() => new Error('fail')));
     const fixture = TestBed.createComponent(GovernanceComponent);
     fixture.detectChanges();
     tick();

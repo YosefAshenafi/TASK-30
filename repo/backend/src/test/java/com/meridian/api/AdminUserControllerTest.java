@@ -11,6 +11,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -339,5 +340,110 @@ class AdminUserControllerTest extends TestContainersBase {
                 break;
             }
         }
+    }
+
+    // Test 14: POST /admin/users as ADMIN creates an ACTIVE user (201) that can log in immediately
+    @Test
+    void createUser_asAdmin_returns201Active() throws Exception {
+        String username = "created_" + System.currentTimeMillis();
+        Map<String, String> req = Map.of(
+                "username", username, "password", "Created@12345678", "role", "FACULTY_MENTOR");
+        mockMvc.perform(post(USERS_URL)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.username").value(username))
+                .andExpect(jsonPath("$.role").value("FACULTY_MENTOR"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+
+        // The bare role name ("FACULTY_MENTOR") resolved correctly and the account is usable.
+        assertThat(loginAs(username, "Created@12345678")).isNotBlank();
+    }
+
+    // Test 15: POST /admin/users as non-admin → 403
+    @Test
+    void createUser_asNonAdmin_returns403() throws Exception {
+        Map<String, String> req = Map.of(
+                "username", "nope_" + System.currentTimeMillis(), "password", "Created@12345678", "role", "STUDENT");
+        mockMvc.perform(post(USERS_URL)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isForbidden());
+    }
+
+    // Test 16: POST /admin/users with an existing username → 409
+    @Test
+    void createUser_duplicateUsername_returns409() throws Exception {
+        Map<String, String> req = Map.of(
+                "username", "admin", "password", "Created@12345678", "role", "STUDENT");
+        mockMvc.perform(post(USERS_URL)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isConflict());
+    }
+
+    // Test 17: PATCH /admin/users/{id}/status as ADMIN updates status (200)
+    @Test
+    void changeStatus_asAdmin_returns200() throws Exception {
+        String username = "status_" + System.currentTimeMillis();
+        Map<String, String> create = Map.of(
+                "username", username, "password", "Status@12345678", "role", "STUDENT");
+        MvcResult res = mockMvc.perform(post(USERS_URL)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(create)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String id = objectMapper.readTree(res.getResponse().getContentAsString()).get("id").asText();
+
+        mockMvc.perform(patch("/api/admin/users/" + id + "/status")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("status", "LOCKED"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("LOCKED"));
+    }
+
+    // Test 18: DELETE /admin/users/{id} as ADMIN hard-deletes (204); the row is then gone (404)
+    @Test
+    void deleteUser_asAdmin_returns204AndUserGone() throws Exception {
+        String username = "todelete_" + System.currentTimeMillis();
+        Map<String, String> create = Map.of(
+                "username", username, "password", "Delete@12345678", "role", "STUDENT");
+        MvcResult res = mockMvc.perform(post(USERS_URL)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(create)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String id = objectMapper.readTree(res.getResponse().getContentAsString()).get("id").asText();
+
+        mockMvc.perform(delete("/api/admin/users/" + id)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNoContent());
+
+        // A second delete now 404s — the user is permanently gone.
+        mockMvc.perform(delete("/api/admin/users/" + id)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNotFound());
+    }
+
+    // Test 19: DELETE /admin/users/{id} as non-admin → 403
+    @Test
+    void deleteUser_asNonAdmin_returns403() throws Exception {
+        mockMvc.perform(delete("/api/admin/users/33333333-0000-0000-0000-000000000004")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+    }
+
+    // Test 20: DELETE own account → 400 (an admin cannot delete themselves)
+    @Test
+    void deleteUser_self_returns400() throws Exception {
+        mockMvc.perform(delete("/api/admin/users/33333333-0000-0000-0000-000000000001")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isBadRequest());
     }
 }

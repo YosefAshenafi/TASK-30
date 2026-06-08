@@ -13,17 +13,17 @@ describe('BackupAdminComponent', () => {
 
   const backupHistory = [
     {
-      backupId: 'b1',
+      id: 'b1',
       type: 'FULL' as const,
+      path: '/var/meridian/backups/b1.pgdump',
       createdAt: '2025-01-01T00:00:00Z',
       sizeBytes: 1048576,
       retentionUntil: '2025-04-01T00:00:00Z',
-      status: 'COMPLETED',
     },
   ];
   const recycleBin = [
     {
-      recycleId: 'r1',
+      id: 'r1',
       entityType: 'Course',
       entityId: 'c1',
       deletedAt: '2025-01-05T00:00:00Z',
@@ -71,7 +71,7 @@ describe('BackupAdminComponent', () => {
   }));
 
   it('triggerBackup() POSTs with selected backup type and prepends record', fakeAsync(() => {
-    const newBackup = { ...backupHistory[0], backupId: 'b2', type: 'INCREMENTAL' as const };
+    const newBackup = { ...backupHistory[0], id: 'b2', type: 'INCREMENTAL' as const };
     apiService.post.and.returnValue(of(newBackup));
 
     const fixture = TestBed.createComponent(BackupAdminComponent);
@@ -117,7 +117,7 @@ describe('BackupAdminComponent', () => {
     flush();
 
     expect(apiService.post).toHaveBeenCalledWith('/admin/recycle-bin/r1/restore', {});
-    expect(comp.recycleBin.find((r) => r.recycleId === 'r1')).toBeUndefined();
+    expect(comp.recycleBin.find((r) => r.id === 'r1')).toBeUndefined();
     expect(comp.processingId).toBeNull();
     expect(snackBar.open).toHaveBeenCalledWith('Entity restored.', 'Dismiss', jasmine.any(Object));
   }));
@@ -133,7 +133,7 @@ describe('BackupAdminComponent', () => {
     flush();
 
     expect(apiService.delete).toHaveBeenCalledWith('/admin/recycle-bin/r1');
-    expect(comp.recycleBin.find((r) => r.recycleId === 'r1')).toBeUndefined();
+    expect(comp.recycleBin.find((r) => r.id === 'r1')).toBeUndefined();
     expect(snackBar.open).toHaveBeenCalledWith('Entity permanently deleted.', 'Dismiss', jasmine.any(Object));
   }));
 

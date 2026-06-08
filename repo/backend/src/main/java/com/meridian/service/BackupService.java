@@ -12,7 +12,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -20,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Transactional
@@ -28,6 +33,8 @@ public class BackupService {
     private static final Logger log = LoggerFactory.getLogger(BackupService.class);
     private static final DateTimeFormatter TIMESTAMP_FMT =
             DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").withZone(ZoneOffset.UTC);
+    /** Upper bound on how long a pg_dump may run before the request gives up. */
+    private static final long BACKUP_TIMEOUT_SECONDS = 120;
 
     private final JdbcTemplate jdbcTemplate;
     private final BackupRepository backupRepository;
@@ -83,13 +90,51 @@ public class BackupService {
             pb.redirectErrorStream(true);
 
             Process process = pb.start();
-            int exitCode = process.waitFor();
 
+            // Drain the merged stdout/stderr continuously on a separate thread. pg_dump writes the
+            // archive to the -f file, but any notices/errors go to this pipe; if it is never read
+            // and the OS pipe buffer (~64KB) fills, pg_dump blocks forever and this request would
+            // hang on waitFor() — the cause of the UI being stuck on "Triggering...".
+            StringBuilder output = new StringBuilder();
+            Thread drainer = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        synchronized (output) {
+                            if (output.length() < 4096) {
+                                output.append(line).append('\n');
+                            }
+                        }
+                    }
+                } catch (IOException ignored) {
+                    // Stream closes when the process exits; nothing actionable here.
+                }
+            }, "pg_dump-drain");
+            drainer.setDaemon(true);
+            drainer.start();
+
+            boolean finished = process.waitFor(BACKUP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                throw AppException.badRequest("Backup timed out after " + BACKUP_TIMEOUT_SECONDS + "s");
+            }
+            drainer.join(2000);
+
+            int exitCode = process.exitValue();
             if (exitCode != 0) {
-                throw AppException.badRequest("Backup failed with exit code: " + exitCode);
+                String detail;
+                synchronized (output) {
+                    detail = output.toString().trim();
+                }
+                throw AppException.badRequest("Backup failed (exit " + exitCode + ")"
+                        + (detail.isEmpty() ? "" : ": " + detail));
             }
         } catch (AppException e) {
             throw e;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw AppException.badRequest("Backup interrupted");
         } catch (Exception e) {
             throw AppException.badRequest("Backup failed: " + e.getMessage());
         }
