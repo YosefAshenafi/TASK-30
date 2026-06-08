@@ -74,6 +74,13 @@ function restTimerRangeValidator(control: AbstractControl): ValidationErrors | n
   ],
   template: `
     <div class="session-capture-container">
+      <!-- Offline Banner: shown whenever the client is offline, in any session state
+           (loading, course selection, error, or an active session). -->
+      <div class="offline-banner" *ngIf="isOffline" role="alert">
+        <mat-icon>wifi_off</mat-icon>
+        Offline — changes saved locally and will sync when connection is restored.
+      </div>
+
       <div *ngIf="loading" class="loading-center">
         <mat-spinner diameter="48"></mat-spinner>
       </div>
@@ -107,12 +114,6 @@ function restTimerRangeValidator(control: AbstractControl): ValidationErrors | n
       </div>
 
       <ng-container *ngIf="!loading && session">
-        <!-- Offline Banner -->
-        <div class="offline-banner" *ngIf="isOffline" role="alert">
-          <mat-icon>wifi_off</mat-icon>
-          Offline — changes saved locally and will sync when connection is restored.
-        </div>
-
         <!-- Session Header -->
         <div class="session-header">
           <div>
